@@ -393,13 +393,19 @@
     function topSurfaceNoCam() { return FOUND_TOP - bricks.length * BRICK_H; }
 
     // 着地時のズレをバランス値に加算。
-    // 影響度 = 今どれだけ傾いているか(instab) × 高さ。
-    // タワーが綺麗(傾き≈0)なら高所でもほぼ等倍=崩れにくい。
-    // 既に傾いている&高いほど、新たなズレが雪だるま式に増幅する。
+    // ・傾きを悪化させる向き … 「今の不安定さ × 高さ」で増幅(高く積むほど&傾くほどシビア)
+    // ・傾きを戻す向き(立て直し) … 等倍で確実に効く。行き過ぎてゼロを越えた分だけ
+    //   反対側の新たな傾きとして等倍計上(増幅しない=過補正で逆に倒れない)
     function applyBalance(offset, level) {
-      const instab = Math.abs(comOffset) / BAL_REF;
-      const sens = 1 + instab * (1 + level * BAL_HSENS);
-      comOffset += offset * sens;
+      const worsening = comOffset === 0 || Math.sign(offset) === Math.sign(comOffset);
+      if (worsening) {
+        const instab = Math.abs(comOffset) / BAL_REF;
+        const sens = 1 + instab * (1 + level * BAL_HSENS);
+        comOffset += offset * sens;
+      } else {
+        // 立て直し方向: 等倍で確実に効く。ゼロを越えた超過分も等倍のまま=過補正で逆に倒れない
+        comOffset += offset;
+      }
     }
 
     function updateCamera() {
