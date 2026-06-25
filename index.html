@@ -233,9 +233,9 @@
     const FOUND_H = 40;
     const FOUND_TOP = H - 70;     // 土台上面のスクリーンY(カメラ無し)
     // バランス＝いちばん上のレンガの中心からのズレ。見た目＝メーター＝判定。
-    const TOL_BASE = 50;          // 低い時の許容(重心がこの範囲なら倒れない)
-    const TOL_SHRINK = 0.7;       // 高く積むほど許容が狭まる(段あたり)
-    const TOL_MIN = 14;           // 許容の下限
+    const TOL_BASE = 56;          // 低い時の許容(重心がこの範囲なら倒れない)
+    const TOL_SHRINK = 0.42;      // 高く積むほど許容が狭まる(段あたり)。小さいほど優しい
+    const TOL_MIN = 24;           // 許容の下限
     const SLIDE_LIMIT = BRICK_W * 0.72; // 直下からこれ以上ズレると即落下
     const PERFECT_EPS = 3;        // パーフェクト判定(px) ※スナップ＆コンボ
     const GOOD_EPS = 18;          // これ以内のズレは「Good!」、超えるとノーリアクション
@@ -702,20 +702,29 @@
     function drawTower() {
       if (bricks.length === 0) return;
       const pivotX = CX;
-      const pivotY = FOUND_TOP + cameraShift;
-      // 一番下のレンガが土台にめり込まないよう、傾けた分だけ持ち上げる
-      // (実際の物体が縁を支点に傾くのと同じ＝沈み込まない)
-      const halfW = BRICK_W / 2;
-      const b0 = bricks[0].cx - CX;
-      const s = Math.sin(renderLean);
-      const dip = Math.max(0, (b0 - halfW) * s, (b0 + halfW) * s);
+      const foundationScreen = FOUND_TOP + cameraShift;
+      const surfaceTopScreen = topSurfaceNoCam() + cameraShift; // 最上面の画面Y
+      // 傾きの回転軸: 土台が見える低い時は土台、高く積んで土台が遠い時は
+      // 最上面から一定距離下に置く。こうすると高さに関係なく最上段の横ズレが一定に収まり、
+      // 「落とした実座標」と「見た目の頂上」がほぼ一致する。
+      const PIVOT_DEPTH = 200;
+      const pivotY = Math.min(foundationScreen, surfaceTopScreen + PIVOT_DEPTH);
+      const usingFoundation = pivotY === foundationScreen;
+      // dip補正(土台にめり込まないよう持ち上げ)は土台ピボットの時だけ意味がある
+      let dip = 0;
+      if (usingFoundation) {
+        const halfW = BRICK_W / 2;
+        const b0 = bricks[0].cx - CX;
+        const s = Math.sin(renderLean);
+        dip = Math.max(0, (b0 - halfW) * s, (b0 + halfW) * s);
+      }
       ctx.save();
       ctx.translate(pivotX, pivotY - dip);
       ctx.rotate(renderLean);
       for (let i = 0; i < bricks.length; i++) {
         const b = bricks[i];
         const relX = b.cx - CX;
-        const relTop = -(b.level + 1) * BRICK_H;
+        const relTop = (foundationScreen - (b.level + 1) * BRICK_H) - pivotY; // 画面上の正しい高さ
         brickFace(relX, relTop, BRICK_W, BRICK_H, b.perfect);
       }
       ctx.restore();
