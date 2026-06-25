@@ -262,25 +262,51 @@
     const BGM_VOLUME = 0.15; // 効果音(置く音/パーフェクト等)を消さないよう控えめに
     const bgm = new Audio("bgm.mp3");
     bgm.loop = true;
-    bgm.volume = BGM_VOLUME;
+    bgm.volume = BGM_VOLUME; // ※iOS Safariはvolume無効。WebAudioのGainで制御する
     bgm.preload = "auto";
     let bgmFadeTimer = null;
-    function clearBgmFade() { if (bgmFadeTimer) { clearInterval(bgmFadeTimer); bgmFadeTimer = null; } }
-    function playBgm() { clearBgmFade(); bgm.volume = BGM_VOLUME; try { bgm.play(); } catch (e) {} }
-    function stopBgm() { clearBgmFade(); try { bgm.pause(); } catch (e) {} bgm.volume = BGM_VOLUME; }
+    let bgmSource = null, bgmGain = null; // WebAudio経由でBGM音量を制御(iOS対応)
+    // iOSは <audio>.volume を無視するため、MediaElementSource→Gain で音量/フェードを行う
+    function ensureBgmGraph() {
+      const ac = audio(); if (!ac || bgmGain) return;
+      try {
+        bgmGain = ac.createGain();
+        bgmGain.gain.value = BGM_VOLUME;
+        bgmGain.connect(ac.destination);
+        bgmSource = ac.createMediaElementSource(bgm);
+        bgmSource.connect(bgmGain);
+        bgm.volume = 1; // 以降の音量制御はWebAudio側に一本化(二重減衰を防ぐ)
+      } catch (e) { bgmGain = null; bgmSource = null; }
+    }
+    function clearBgmFade() { if (bgmFadeTimer) { clearTimeout(bgmFadeTimer); clearInterval(bgmFadeTimer); bgmFadeTimer = null; } }
+    function setBgmGain(v) {
+      if (bgmGain && actx) {
+        const now = actx.currentTime;
+        bgmGain.gain.cancelScheduledValues(now);
+        bgmGain.gain.setValueAtTime(v, now);
+      } else { bgm.volume = v; } // WebAudio非対応時のフォールバック
+    }
+    function playBgm() { clearBgmFade(); ensureBgmGraph(); setBgmGain(BGM_VOLUME); try { bgm.play(); } catch (e) {} }
+    function stopBgm() { clearBgmFade(); try { bgm.pause(); } catch (e) {} setBgmGain(BGM_VOLUME); }
     // ゲームオーバー時: 徐々に音量を下げてから停止(余韻のあるフェードアウト)
     function fadeOutBgm(ms) {
       clearBgmFade();
-      const step = 50; // 更新間隔(ms)
-      const dec = (bgm.volume || BGM_VOLUME) / Math.max(1, ms / step);
-      bgmFadeTimer = setInterval(function () {
-        bgm.volume = Math.max(0, bgm.volume - dec);
-        if (bgm.volume <= 0.001) {
-          clearBgmFade();
-          try { bgm.pause(); } catch (e) {}
-          bgm.volume = BGM_VOLUME; // 次回再生用に戻す
-        }
-      }, step);
+      ensureBgmGraph();
+      if (bgmGain && actx) {
+        const now = actx.currentTime;
+        bgmGain.gain.cancelScheduledValues(now);
+        bgmGain.gain.setValueAtTime(bgmGain.gain.value, now);
+        bgmGain.gain.linearRampToValueAtTime(0.0001, now + ms / 1000);
+        bgmFadeTimer = setTimeout(function () { try { bgm.pause(); } catch (e) {} bgmFadeTimer = null; }, ms);
+      } else {
+        // フォールバック(volumeが効く環境のみ)
+        const step = 50;
+        const dec = (bgm.volume || BGM_VOLUME) / Math.max(1, ms / step);
+        bgmFadeTimer = setInterval(function () {
+          bgm.volume = Math.max(0, bgm.volume - dec);
+          if (bgm.volume <= 0.001) { clearBgmFade(); try { bgm.pause(); } catch (e) {} bgm.volume = BGM_VOLUME; }
+        }, step);
+      }
     }
     const PAP_W = 62, PAP_H = Math.round(62 * 572 / 502); // 画像比率を保持
 
