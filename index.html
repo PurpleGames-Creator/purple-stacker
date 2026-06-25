@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>🟣 Purple Stacker 🟣</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      margin: 0; padding: 0; height: 100%;
+      background: #0b0617;
+      color: #f4f0ff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+      overflow: hidden;
+      user-select: none; -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+    .app {
+      position: fixed; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: radial-gradient(circle at 50% 0%, #2a1856 0%, #140a2e 55%, #0b0617 100%);
+    }
+    .canvas-wrap {
+      position: relative;
+      width: 100vw; height: 100vh;
+      max-width: 100vw; max-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+    }
+    canvas {
+      display: block;
+      width: auto; height: 100%;
+      max-width: 100vw;
+      aspect-ratio: 360 / 640;
+      background: #1a1033;
+      box-shadow: 0 0 60px rgba(124, 58, 237, 0.35);
+      touch-action: none;
+    }
+    /* ---- Overlays ---- */
+    .overlay {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      padding: 16px;
+      z-index: 5;
+    }
+    .card {
+      width: min(92vw, 360px);
+      max-height: 92vh;
+      overflow-y: auto;
+      background: linear-gradient(160deg, rgba(46, 26, 92, 0.96), rgba(24, 13, 51, 0.97));
+      border: 1px solid rgba(168, 130, 255, 0.35);
+      border-radius: 20px;
+      padding: 22px 18px 18px;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08);
+      -webkit-overflow-scrolling: touch;
+    }
+    .title {
+      font-size: 30px; font-weight: 800; letter-spacing: 1px;
+      background: linear-gradient(90deg, #c4a0ff, #f0e6ff, #a855f7);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+      margin-bottom: 2px;
+      text-shadow: 0 0 24px rgba(168,130,255,0.4);
+    }
+    .subtitle { font-size: 12px; color: #b9a7e8; margin-bottom: 16px; letter-spacing: 0.5px; }
+    .label { font-size: 12px; color: #cbb9f5; margin: 14px 0 6px; }
+    .nick-input {
+      width: 100%; padding: 11px 12px; font-size: 15px;
+      border-radius: 12px; border: 1px solid rgba(168,130,255,0.4);
+      background: rgba(13, 7, 30, 0.8); color: #fff; text-align: center;
+      outline: none;
+    }
+    .nick-input:focus { border-color: #a855f7; box-shadow: 0 0 0 3px rgba(168,130,255,0.25); }
+    .primary-btn {
+      width: 100%; margin-top: 14px; padding: 14px;
+      font-size: 17px; font-weight: 700; color: #fff;
+      border: none; border-radius: 14px; cursor: pointer;
+      background: linear-gradient(135deg, #9333ea, #6d28d9);
+      box-shadow: 0 8px 20px rgba(124,58,237,0.45), inset 0 1px 0 rgba(255,255,255,0.2);
+      transition: transform 0.08s ease, filter 0.15s ease;
+    }
+    .primary-btn:active { transform: scale(0.97); filter: brightness(1.1); }
+    .how {
+      margin-top: 14px; font-size: 11.5px; line-height: 1.7; color: #c8b9ef;
+      background: rgba(13,7,30,0.45); border-radius: 12px; padding: 10px 12px; text-align: left;
+    }
+    .how b { color: #f0c674; }
+    /* ranking */
+    .rank-box { margin-top: 16px; }
+    .rank-head {
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+      font-size: 14px; font-weight: 700; color: #e7dcff; margin-bottom: 8px;
+    }
+    .rank-arrow { cursor: pointer; padding: 2px 10px; font-size: 18px; color: #a855f7; user-select: none; }
+    .rank-arrow:active { color: #fff; }
+    .rank-title { width: 150px; }
+    .rank-list { list-style: none; padding: 0; margin: 0; max-height: 210px; overflow-y: auto; text-align: left; }
+    .rank-list li {
+      display: flex; justify-content: space-between; gap: 8px;
+      padding: 4px 8px; font-size: 13px; border-radius: 8px; color: #e9e0ff;
+    }
+    .rank-list li:nth-child(odd) { background: rgba(168,130,255,0.07); }
+    .rank-list li.me { background: rgba(240,198,116,0.18); color: #ffe9b8; font-weight: 700; }
+    .rank-list .rk { color: #b9a7e8; min-width: 34px; }
+    .rank-list .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .rank-list .sc { color: #f0c674; font-weight: 700; }
+    .rank-list .r1 .sc, .rank-list .r1 .nm { color: #ffd76b; }
+    .muted { color: #9b8bc4; font-size: 12px; padding: 10px; }
+    /* result */
+    .result-score { font-size: 15px; margin: 6px 0; color: #e3d8ff; }
+    .result-score b { font-size: 34px; color: #f0c674; vertical-align: -4px; }
+    .new-record { display: none; margin: 8px auto; font-weight: 800; color: #ffd76b; font-size: 16px;
+      animation: pop 0.6s ease infinite alternate; }
+    @keyframes pop { from { transform: scale(1); } to { transform: scale(1.08); } }
+    .btn-row { display: flex; gap: 10px; margin-top: 14px; }
+    .btn-row button { flex: 1; padding: 12px; font-size: 15px; font-weight: 700; border-radius: 12px; border: none; cursor: pointer; }
+    .btn-retry { color: #fff; background: linear-gradient(135deg, #9333ea, #6d28d9); }
+    .btn-sub { color: #d9caff; background: rgba(168,130,255,0.18); border: 1px solid rgba(168,130,255,0.35) !important; }
+    .btn-row button:active { transform: scale(0.97); }
+    .share-btn {
+      width: 100%; margin-top: 10px; padding: 11px; font-size: 14px; font-weight: 700;
+      color: #0b0617; background: linear-gradient(135deg, #f0c674, #ffb703);
+      border: none; border-radius: 12px; cursor: pointer;
+    }
+    .share-btn:active { transform: scale(0.97); }
+    .hidden { display: none !important; }
+    .toast {
+      position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+      background: rgba(13,7,30,0.92); color: #fff; padding: 10px 18px; border-radius: 20px;
+      font-size: 13px; z-index: 20; opacity: 0; transition: opacity 0.3s; pointer-events: none;
+      border: 1px solid rgba(168,130,255,0.4);
+    }
+    .toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="canvas-wrap">
+      <canvas id="game" width="360" height="640"></canvas>
+
+      <!-- START -->
+      <div id="start-screen" class="overlay">
+        <div class="card">
+          <div class="title">🟣 Purple Stacker 🟣</div>
+          <div class="subtitle">パプ太郎とレンガを積み上げろ</div>
+
+          <div class="label">ニックネームを入力してください</div>
+          <input id="nickname-input" class="nick-input" type="text" maxlength="12" placeholder="例: むらさき太郎" />
+          <button id="btn-start" class="primary-btn">ゲームスタート</button>
+
+          <div class="how">
+            🧱 画面を<b>タップ</b>するとパプ太郎がレンガを落とすよ<br>
+            ⚖️ 左右の<b>バランス</b>が崩れて重心が外れると倒壊…！<br>
+            🎯 真下にピッタリ重ねると<b>パーフェクト</b>＆コンボ！<br>
+            🏆 何<b>段</b>積めるか世界中のプレイヤーと競おう
+          </div>
+
+          <div class="rank-box">
+            <div class="rank-head">
+              <span id="rank-prev" class="rank-arrow">◀</span>
+              <span id="rank-title" class="rank-title">今日のランキング</span>
+              <span id="rank-next" class="rank-arrow">▶</span>
+            </div>
+            <ol id="rank-list" class="rank-list"><li class="muted">読み込み中…</li></ol>
+          </div>
+        </div>
+      </div>
+
+      <!-- GAME OVER -->
+      <div id="over-screen" class="overlay hidden">
+        <div class="card">
+          <div class="title" style="font-size:24px;">💥 TIMBER! 💥</div>
+          <div class="subtitle" id="over-nick"></div>
+          <div class="new-record" id="new-record">✨ 自己ベスト更新！ ✨</div>
+          <div class="result-score">今回の記録　<b id="res-current">0</b> 段</div>
+          <div class="result-score">自己ベスト　<span id="res-best">0</span> 段</div>
+          <button id="btn-share" class="share-btn">📣 記録をシェア</button>
+          <div class="btn-row">
+            <button id="btn-retry" class="btn-retry">もう一回</button>
+            <button id="btn-top" class="btn-sub">トップへ</button>
+          </div>
+          <div class="rank-box">
+            <div class="rank-head">
+              <span id="rank-prev2" class="rank-arrow">◀</span>
+              <span id="rank-title2" class="rank-title">今日のランキング</span>
+              <span id="rank-next2" class="rank-arrow">▶</span>
+            </div>
+            <ol id="rank-list2" class="rank-list"></ol>
+          </div>
+        </div>
+      </div>
+
+      <div id="toast" class="toast"></div>
+    </div>
+  </div>
+
+  <script>
+  (function () {
+    "use strict";
+
+    /* ===================== Supabase ===================== */
+    const SUPABASE_URL = "https://hefayilffszrczxhnpii.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhlZmF5aWxmZnN6cmN6eGhucGlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE5NDI5NDEsImV4cCI6MjA4NzUxODk0MX0.qUsuQOIZzdlFLXtR-i1d9TX5c3P9QKPdhv34QGt4V_k";
+    const RANKING_TABLE = "stacker_scores";
+    let supa = null;
+    function getSupa() {
+      if (!supa && window.supabase) {
+        try { supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); } catch (e) { supa = null; }
+      }
+      return supa;
+    }
+
+    /* ===================== Canvas ===================== */
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+    const W = canvas.width;   // 360
+    const H = canvas.height;  // 640
+    const CX = W / 2;
+
+    /* ===================== Config ===================== */
+    const BRICK_W = 92;
+    const BRICK_H = 26;
+    const FOUND_W = 120;          // 土台の幅
+    const FOUND_H = 40;
+    const FOUND_TOP = H - 70;     // 土台上面のスクリーンY(カメラ無し)
+    const ANCHOR_W = 3;           // 土台の重し(重心計算の安定化)
+    const LEAN_LIMIT = 52;        // 重心がここを超えると倒壊(px)
+    const SLIDE_LIMIT = BRICK_W * 0.92; // 直下からこれ以上ズレると即落下
+    const PERFECT_EPS = 7;        // パーフェクト判定(px)
+    const PAP_Y = 70;             // パプ太郎のスクリーンY(固定)
+    const TARGET_TOP_SCREEN = H * 0.46; // 積み上げ面を保つ画面位置
+    const DROP_GRAV = 0.9;
+
+    /* ===================== State ===================== */
+    let state = "start"; // start | playing | over
+    let bricks = [];     // {cx, level, w, perfect}
+    let falling = null;  // {cx, y, vy}  y = no-camera top
+    let pap = { x: CX, dir: 1, speed: 2.0 };
+    let comOffset = 0;   // 重心の中心からのズレ(px)
+    let leanAngle = 0;
+    let renderLean = 0;
+    let combo = 0;
+    let score = 0;
+    let bestScore = 0;
+    let particles = [];
+    let popups = [];
+    let debris = [];     // 倒壊アニメ用
+    let shake = 0;
+    let cameraShift = 0;
+    let wind = 0;        // 風(高所)
+    let windTarget = 0;
+    let flash = 0;
+    let playerName = "";
+    let previousBest = 0;
+    let bgPhase = 0;     // 0昼 1夕 2夜 3宇宙
+    let cameraTarget = 0;
+
+    /* ===================== Helpers ===================== */
+    function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+    function rand(a, b) { return a + Math.random() * (b - a); }
+    function vibrate(ms) { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {} }
+
+    function topSurfaceNoCam() { return FOUND_TOP - bricks.length * BRICK_H; }
+
+    function recomputeCOM() {
+      let sum = CX * ANCHOR_W;
+      let cnt = ANCHOR_W;
+      for (let i = 0; i < bricks.length; i++) { sum += bricks[i].cx; cnt++; }
+      comOffset = (sum / cnt) - CX;
+    }
+
+    function updateCamera() {
+      cameraTarget = Math.max(0, TARGET_TOP_SCREEN - topSurfaceNoCam());
+    }
+
+    /* ===================== Game control ===================== */
+    function resetGame() {
+      bricks = [];
+      falling = null;
+      pap = { x: CX, dir: Math.random() < 0.5 ? -1 : 1, speed: 2.0 };
+      comOffset = 0; leanAngle = 0; renderLean = 0;
+      combo = 0; score = 0;
+      particles = []; popups = []; debris = [];
+      shake = 0; wind = 0; windTarget = 0; flash = 0;
+      bgPhase = 0;
+      state = "playing";
+      updateCamera();
+      cameraShift = cameraTarget;
+    }
+
+    function dropBrick() {
+      if (state !== "playing" || falling) return;
+      falling = { cx: pap.x, y: PAP_Y - cameraShift, vy: 0 };
+    }
+
+    function placeBrick() {
+      const belowCx = bricks.length > 0 ? bricks[bricks.length - 1].cx : CX;
+      const offset = falling.cx - belowCx;
+
+      // 直下から外れすぎ → 乗らずに滑り落ちてゲームオーバー
+      if (Math.abs(offset) > SLIDE_LIMIT) {
+        const sy = topSurfaceNoCam() - BRICK_H + cameraShift;
+        const sgn = offset >= 0 ? 1 : -1;
+        debris.push({ x: falling.cx, y: sy, w: BRICK_W, h: BRICK_H, vx: sgn * rand(2, 4), vy: rand(-2, 1), va: sgn * 0.12, ang: 0, perfect: false });
+        falling = null;
+        collapse("slide");
+        return;
+      }
+
+      const isPerfect = Math.abs(offset) <= PERFECT_EPS;
+      let cx = falling.cx;
+      if (isPerfect) cx = belowCx; // 吸着
+
+      addBrickToStack(cx, isPerfect);
+      falling = null;
+      score = bricks.length; // スコア = 段数
+
+      // 着地エフェクト(新レンガ底面の接地点)
+      const surfY = topSurfaceNoCam() + BRICK_H + cameraShift;
+      spawnDust(cx, surfY, isPerfect);
+
+      if (isPerfect) {
+        combo++;
+        flash = 0.5;
+        vibrate(30);
+        popups.push({ x: cx, y: surfY - 30, life: 1, text: combo >= 2 ? "PERFECT x" + combo : "PERFECT!", color: "#ffe9b8" });
+      } else {
+        combo = 0;
+        vibrate(12);
+      }
+
+      recomputeCOM();
+
+      // 重心オーバー → 倒壊
+      if (Math.abs(comOffset) > LEAN_LIMIT) {
+        collapse("lean");
+        return;
+      }
+
+      // 難易度: パプ太郎が速くなる
+      pap.speed = clamp(2.0 + bricks.length * 0.055, 2.0, 5.2);
+      // 背景フェーズ
+      bgPhase = bricks.length < 12 ? 0 : bricks.length < 25 ? 1 : bricks.length < 45 ? 2 : 3;
+      // 風(20段以降)
+      if (bricks.length >= 20 && Math.random() < 0.04) windTarget = rand(-1, 1);
+
+      updateCamera();
+    }
+
+    function addBrickToStack(cx, perfect) {
+      bricks.push({ cx: cx, level: bricks.length, w: BRICK_W, perfect: perfect });
+    }
+
+    function collapse(reason) {
+      if (state !== "playing") return;
+      state = "over";
+      shake = 18;
+      flash = 0.7;
+      vibrate([40, 30, 90]);
+      // 全レンガを物理デブリ化
+      const dir = comOffset >= 0 ? 1 : -1;
+      const pivotScreenY = FOUND_TOP + cameraShift;
+      for (let i = 0; i < bricks.length; i++) {
+        const b = bricks[i];
+        const by = FOUND_TOP - (b.level + 1) * BRICK_H + cameraShift;
+        debris.push({
+          x: b.cx, y: by, w: BRICK_W, h: BRICK_H,
+          vx: dir * rand(0.5, 3.5) + (b.cx - CX) * 0.02,
+          vy: rand(-4, -1),
+          va: dir * rand(0.02, 0.12), ang: 0,
+          perfect: b.perfect
+        });
+      }
+      bricks = [];
+      setTimeout(finishGame, 1200);
+    }
+
+    async function finishGame() {
+      // ベスト判定
+      const isNew = score > previousBest;
+      if (score > bestScore) bestScore = score;
+      saveLocalBest();
+      // 画面
+      document.getElementById("over-nick").textContent = "プレイヤー: " + (playerName || "ななしさん");
+      document.getElementById("res-current").textContent = score;
+      document.getElementById("res-best").textContent = bestScore;
+      document.getElementById("new-record").style.display = isNew && score > 0 ? "block" : "none";
+      showOver();
+      // 送信
+      const client = getSupa();
+      if (client && score > 0) {
+        try {
+          await client.from(RANKING_TABLE).insert({ nickname: (playerName || "").trim() || "ななしさん", score: score });
+        } catch (e) {}
+      }
+      loadRanking();
+    }
+
+    /* ===================== Particles / popups ===================== */
+    function spawnDust(x, y, big) {
+      const n = big ? 22 : 10;
+      for (let i = 0; i < n; i++) {
+        const a = rand(0, Math.PI * 2);
+        const sp = rand(1, big ? 5 : 3);
+        particles.push({
+          x: x + rand(-BRICK_W / 2, BRICK_W / 2), y: y,
+          vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 1,
+          life: 1, size: rand(2, big ? 6 : 4),
+          color: big ? (Math.random() < 0.5 ? "#ffe9b8" : "#f0c674") : "#b9a7e8"
+        });
+      }
+    }
+
+    function updateParticles(dt) {
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 0.15 * dt;
+        p.life -= 0.02 * dt;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+      for (let i = popups.length - 1; i >= 0; i--) {
+        const p = popups[i];
+        p.y -= 0.6 * dt; p.life -= 0.012 * dt;
+        if (p.life <= 0) popups.splice(i, 1);
+      }
+    }
+
+    /* ===================== Drawing ===================== */
+    const SKY = [
+      ["#8ec5ff", "#cfe8ff"], // 昼
+      ["#ff9e6d", "#ffd29e"], // 夕
+      ["#1b2a6b", "#3a2a6b"], // 夜
+      ["#06030f", "#150a2e"]  // 宇宙
+    ];
+    let stars = [];
+    for (let i = 0; i < 60; i++) stars.push({ x: Math.random() * W, y: Math.random() * H * 0.7, r: Math.random() * 1.6 + 0.4, tw: Math.random() * Math.PI * 2 });
+
+    function drawBackground(t) {
+      const c = SKY[bgPhase];
+      const g = ctx.createLinearGradient(0, 0, 0, H);
+      g.addColorStop(0, c[0]); g.addColorStop(1, c[1]);
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+      if (bgPhase >= 2) {
+        for (const s of stars) {
+          const a = 0.4 + 0.6 * Math.abs(Math.sin(t * 0.002 + s.tw));
+          ctx.globalAlpha = a; ctx.fillStyle = "#fff";
+          ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+      // 雲(昼/夕)
+      if (bgPhase <= 1) {
+        ctx.fillStyle = "rgba(255,255,255,0.5)";
+        drawCloud(60 + (t * 0.01 % (W + 80)) - 40, 90, 1);
+        drawCloud(240 + (t * 0.006 % (W + 80)) - 40, 150, 0.8);
+      }
+    }
+    function drawCloud(x, y, s) {
+      ctx.beginPath();
+      ctx.arc(x, y, 18 * s, 0, Math.PI * 2);
+      ctx.arc(x + 20 * s, y + 4 * s, 14 * s, 0, Math.PI * 2);
+      ctx.arc(x - 18 * s, y + 6 * s, 12 * s, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function brickFace(x, yTop, w, h, perfect) {
+      // 立体的なレンガ(紫系グラデ＋目地＋ハイライト)
+      const r = 5;
+      const g = ctx.createLinearGradient(0, yTop, 0, yTop + h);
+      if (perfect) { g.addColorStop(0, "#f7d98a"); g.addColorStop(0.5, "#e9b94f"); g.addColorStop(1, "#b9852e"); }
+      else { g.addColorStop(0, "#a472e8"); g.addColorStop(0.5, "#7c44d4"); g.addColorStop(1, "#5a2ca3"); }
+      ctx.fillStyle = g;
+      roundRect(x - w / 2, yTop, w, h, r); ctx.fill();
+      // 上面ハイライト
+      ctx.fillStyle = "rgba(255,255,255,0.28)";
+      roundRect(x - w / 2 + 3, yTop + 2, w - 6, 4, 2); ctx.fill();
+      // 下影
+      ctx.fillStyle = "rgba(0,0,0,0.22)";
+      roundRect(x - w / 2 + 3, yTop + h - 5, w - 6, 3, 2); ctx.fill();
+      // 縦の目地(レンガ風)
+      ctx.strokeStyle = "rgba(0,0,0,0.16)"; ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(x, yTop + 4); ctx.lineTo(x, yTop + h - 4);
+      ctx.moveTo(x - w / 4, yTop + 4); ctx.lineTo(x - w / 4, yTop + h - 4);
+      ctx.moveTo(x + w / 4, yTop + 4); ctx.lineTo(x + w / 4, yTop + h - 4);
+      ctx.stroke();
+      // 枠
+      ctx.strokeStyle = perfect ? "rgba(255,240,200,0.6)" : "rgba(200,170,255,0.35)";
+      ctx.lineWidth = 1;
+      roundRect(x - w / 2, yTop, w, h, r); ctx.stroke();
+    }
+
+    function roundRect(x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    }
+
+    function drawFoundation() {
+      const y = FOUND_TOP + cameraShift;
+      // 地面
+      ctx.fillStyle = "rgba(0,0,0,0.25)";
+      ctx.fillRect(0, y + FOUND_H - 2, W, H);
+      const g = ctx.createLinearGradient(0, y, 0, y + FOUND_H);
+      g.addColorStop(0, "#5b4636"); g.addColorStop(1, "#3a2c22");
+      ctx.fillStyle = g;
+      roundRect(CX - FOUND_W / 2, y, FOUND_W, FOUND_H, 6); ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.12)";
+      roundRect(CX - FOUND_W / 2 + 4, y + 3, FOUND_W - 8, 4, 2); ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,0.18)"; ctx.lineWidth = 1;
+      roundRect(CX - FOUND_W / 2, y, FOUND_W, FOUND_H, 6); ctx.stroke();
+    }
+
+    function drawTower() {
+      if (bricks.length === 0) return;
+      const pivotX = CX;
+      const pivotY = FOUND_TOP + cameraShift;
+      ctx.save();
+      ctx.translate(pivotX, pivotY);
+      ctx.rotate(renderLean);
+      for (let i = 0; i < bricks.length; i++) {
+        const b = bricks[i];
+        const relX = b.cx - CX;
+        const relTop = -(b.level + 1) * BRICK_H;
+        brickFace(relX, relTop, BRICK_W, BRICK_H, b.perfect);
+      }
+      ctx.restore();
+    }
+
+    function drawFalling() {
+      if (!falling) return;
+      const y = falling.y + cameraShift;
+      // 落下予測ガイド(序盤のみ薄く)
+      if (bricks.length < 6) {
+        const belowCx = bricks.length > 0 ? bricks[bricks.length - 1].cx : CX;
+        const surfScreen = topSurfaceNoCam() + cameraShift; // 現在の積み上げ面
+        ctx.strokeStyle = "rgba(255,255,255,0.18)"; ctx.lineWidth = 2; ctx.setLineDash([4, 6]);
+        ctx.beginPath(); ctx.moveTo(falling.cx, y + BRICK_H); ctx.lineTo(falling.cx, surfScreen); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 0.5; ctx.fillStyle = "#fff";
+        ctx.fillRect(belowCx - 1, surfScreen - 3, 2, 6);
+        ctx.globalAlpha = 1;
+      }
+      brickFace(falling.cx, y, BRICK_W, BRICK_H, false);
+    }
+
+    function drawPaptaro(t) {
+      const x = pap.x;
+      const y = PAP_Y;
+      const bob = Math.sin(t * 0.008) * 2;
+      ctx.save();
+      ctx.translate(x, y + bob);
+      // 影
+      ctx.fillStyle = "rgba(0,0,0,0.15)";
+      ctx.beginPath(); ctx.ellipse(0, 22, 18, 5, 0, 0, Math.PI * 2); ctx.fill();
+      // 体(紫の丸キャラ)
+      const g = ctx.createRadialGradient(-5, -5, 4, 0, 0, 20);
+      g.addColorStop(0, "#c79bff"); g.addColorStop(1, "#7c3aed");
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(0, 0, 17, 0, Math.PI * 2); ctx.fill();
+      // ほっぺ
+      ctx.fillStyle = "rgba(255,150,200,0.5)";
+      ctx.beginPath(); ctx.arc(-8, 4, 3, 0, Math.PI * 2); ctx.arc(8, 4, 3, 0, Math.PI * 2); ctx.fill();
+      // 目
+      ctx.fillStyle = "#1a0b33";
+      ctx.beginPath(); ctx.arc(-6, -2, 2.6, 0, Math.PI * 2); ctx.arc(6, -2, 2.6, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#fff";
+      ctx.beginPath(); ctx.arc(-5, -3, 1, 0, Math.PI * 2); ctx.arc(7, -3, 1, 0, Math.PI * 2); ctx.fill();
+      // 口
+      ctx.strokeStyle = "#1a0b33"; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.arc(0, 3, 4, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+      // 手に持ったレンガ(落下中でなければ)
+      if (!falling && state === "playing") {
+        brickFace(0, 16, 40, 14, false);
+      }
+      ctx.restore();
+    }
+
+    function drawParticles() {
+      for (const p of particles) {
+        ctx.globalAlpha = Math.max(0, p.life);
+        ctx.fillStyle = p.color;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      for (const p of popups) {
+        ctx.globalAlpha = Math.max(0, p.life);
+        ctx.font = "bold 18px sans-serif"; ctx.textAlign = "center";
+        ctx.fillStyle = p.color; ctx.strokeStyle = "rgba(0,0,0,0.4)"; ctx.lineWidth = 3;
+        ctx.strokeText(p.text, p.x, p.y); ctx.fillText(p.text, p.x, p.y);
+      }
+      ctx.globalAlpha = 1; ctx.textAlign = "start";
+    }
+
+    function drawDebris() {
+      for (const d of debris) {
+        ctx.save();
+        ctx.translate(d.x, d.y);
+        ctx.rotate(d.ang);
+        brickFace(0, -d.h / 2, d.w, d.h, d.perfect);
+        ctx.restore();
+      }
+    }
+
+    function drawHUD() {
+      // 段数
+      ctx.font = "bold 40px sans-serif"; ctx.textAlign = "center";
+      ctx.fillStyle = "rgba(255,255,255,0.92)";
+      ctx.strokeStyle = "rgba(80,40,140,0.6)"; ctx.lineWidth = 4;
+      ctx.strokeText(score + " 段", CX, 44);
+      ctx.fillText(score + " 段", CX, 44);
+      // コンボ
+      if (combo >= 2) {
+        ctx.font = "bold 16px sans-serif"; ctx.fillStyle = "#ffe9b8";
+        ctx.fillText("COMBO " + combo, CX, 66);
+      }
+      ctx.textAlign = "start";
+      drawBalanceMeter();
+    }
+
+    function drawBalanceMeter() {
+      const mx = 20, my = H - 26, mw = W - 40, mh = 10;
+      ctx.fillStyle = "rgba(0,0,0,0.35)";
+      roundRect(mx, my, mw, mh, 5); ctx.fill();
+      // 安全ゾーン
+      const safeRatio = 0.55;
+      ctx.fillStyle = "rgba(120,220,140,0.25)";
+      roundRect(mx + mw * (0.5 - safeRatio / 2), my, mw * safeRatio, mh, 5); ctx.fill();
+      // マーカー
+      const ratio = clamp(comOffset / (LEAN_LIMIT * 1.1), -1, 1);
+      const px = mx + mw / 2 + ratio * (mw / 2 - 6);
+      const danger = Math.abs(comOffset) / LEAN_LIMIT;
+      ctx.fillStyle = danger > 0.8 ? "#ff5d5d" : danger > 0.55 ? "#ffd76b" : "#a0e8b0";
+      ctx.beginPath(); ctx.arc(px, my + mh / 2, 8, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,0.7)"; ctx.lineWidth = 1.5; ctx.stroke();
+      // 中心線
+      ctx.strokeStyle = "rgba(255,255,255,0.5)"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(mx + mw / 2, my - 2); ctx.lineTo(mx + mw / 2, my + mh + 2); ctx.stroke();
+      // ラベル
+      ctx.font = "10px sans-serif"; ctx.fillStyle = "rgba(255,255,255,0.7)"; ctx.textAlign = "center";
+      ctx.fillText("⚖ バランス", CX, my - 6);
+      ctx.textAlign = "start";
+    }
+
+    function drawWindFx(t) {
+      if (Math.abs(wind) < 0.05 || bgPhase < 1) return;
+      ctx.strokeStyle = "rgba(255,255,255,0.18)"; ctx.lineWidth = 1.5;
+      for (let i = 0; i < 5; i++) {
+        const y = 120 + i * 70 + Math.sin(t * 0.01 + i) * 8;
+        const len = 30 * Math.abs(wind);
+        const sx = wind > 0 ? 20 : W - 20;
+        ctx.beginPath(); ctx.moveTo(sx, y); ctx.lineTo(sx + Math.sign(wind) * len, y); ctx.stroke();
+      }
+    }
+
+    /* ===================== Update ===================== */
+    function update(dt, t) {
+      // カメラ・風の補間
+      cameraShift += (cameraTarget - cameraShift) * 0.15 * dt;
+      wind += (windTarget - wind) * 0.02 * dt;
+      windTarget *= Math.pow(0.995, dt);
+
+      if (state === "playing") {
+        // パプ太郎の往復移動
+        const margin = 28;
+        pap.x += pap.dir * pap.speed * dt + wind * 0.3 * dt;
+        if (pap.x < margin) { pap.x = margin; pap.dir = 1; }
+        if (pap.x > W - margin) { pap.x = W - margin; pap.dir = -1; }
+
+        // 落下中レンガ
+        if (falling) {
+          falling.vy += DROP_GRAV * dt;
+          falling.y += falling.vy * dt;
+          const landY = topSurfaceNoCam() - BRICK_H; // 新レンガ上面がここに来たら接地
+          if (falling.y >= landY) { falling.y = landY; placeBrick(); }
+        }
+
+        // 重心 → 傾き(見た目)。風で微振動
+        leanAngle = clamp(comOffset * 0.0055, -0.42, 0.42);
+        const sway = Math.sin(t * 0.004) * wind * 0.02;
+        renderLean += (leanAngle + sway - renderLean) * 0.12 * dt;
+      } else if (state === "over") {
+        // デブリ物理
+        for (const d of debris) {
+          d.vy += 0.5 * dt; d.x += d.vx * dt; d.y += d.vy * dt; d.ang += d.va * dt;
+          if (d.y > H + 60) d.y = H + 60;
+        }
+        renderLean += (0 - renderLean) * 0.1 * dt;
+      }
+
+      updateParticles(dt);
+      if (shake > 0) shake = Math.max(0, shake - 0.8 * dt);
+      if (flash > 0) flash = Math.max(0, flash - 0.04 * dt);
+    }
+
+    /* ===================== Render ===================== */
+    function render(t) {
+      ctx.save();
+      if (shake > 0) ctx.translate(rand(-shake, shake) * 0.5, rand(-shake, shake) * 0.5);
+      drawBackground(t);
+      drawWindFx(t);
+      drawFoundation();
+      drawTower();
+      drawDebris();
+      drawFalling();
+      drawParticles();
+      if (state === "playing") { drawPaptaro(t); drawHUD(); }
+      ctx.restore();
+      if (flash > 0) {
+        ctx.fillStyle = "rgba(255,255,255," + (flash * 0.5) + ")";
+        ctx.fillRect(0, 0, W, H);
+      }
+    }
+
+    /* ===================== Loop ===================== */
+    let last = performance.now();
+    function loop(now) {
+      const ms = Math.min(50, now - last); last = now;
+      const dt = ms / (1000 / 60) || 1;
+      update(dt, now);
+      render(now);
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+
+    /* ===================== Input ===================== */
+    function onTap(e) {
+      if (state !== "playing") return;
+      // カード上のUI操作は無視
+      if (e.target && e.target.closest && e.target.closest(".card")) return;
+      e.preventDefault();
+      dropBrick();
+    }
+    canvas.addEventListener("mousedown", onTap);
+    canvas.addEventListener("touchstart", onTap, { passive: false });
+    window.addEventListener("keydown", function (e) {
+      if (e.code === "Space" || e.code === "ArrowDown") { e.preventDefault(); dropBrick(); }
+    });
+
+    /* ===================== Local best ===================== */
+    function localKey() { return "purple_stacker_best_" + ((playerName || "").trim() || "_"); }
+    function saveLocalBest() { try { localStorage.setItem(localKey(), String(bestScore)); } catch (e) {} }
+    function loadLocalBest() { try { const v = parseInt(localStorage.getItem(localKey()) || "0", 10); bestScore = isNaN(v) ? 0 : v; } catch (e) { bestScore = 0; } }
+
+    /* ===================== Ranking ===================== */
+    const rankModes = [
+      { id: "daily", name: "今日のランキング" },
+      { id: "monthly", name: "月間ランキング" },
+      { id: "all", name: "歴代ランキング" }
+    ];
+    let rankIdx = 0;
+
+    function rankLabel() {
+      const m = rankModes[rankIdx];
+      if (m.id === "monthly") return (new Date().getMonth() + 1) + "月の月間ランキング";
+      return m.name;
+    }
+    function rankDateFrom() {
+      const m = rankModes[rankIdx]; const now = new Date();
+      if (m.id === "daily") return new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+      if (m.id === "monthly") return new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+      return null;
+    }
+
+    async function loadRanking() {
+      const titles = [document.getElementById("rank-title"), document.getElementById("rank-title2")];
+      const lists = [document.getElementById("rank-list"), document.getElementById("rank-list2")];
+      titles.forEach(function (el) { if (el) el.textContent = rankLabel(); });
+      const client = getSupa();
+      if (!client) { renderRankRows(lists, [{ muted: "ランキングを読み込めません" }]); return; }
+      try {
+        const from = rankDateFrom();
+        let q = client.from(RANKING_TABLE).select("nickname, score, created_at").order("score", { ascending: false }).limit(3000);
+        if (from) q = q.gte("created_at", from);
+        const { data, error } = await q;
+        if (error) { renderRankRows(lists, [{ muted: "取得できませんでした" }]); return; }
+        const byName = {};
+        (data || []).forEach(function (row) {
+          const n = (row.nickname || "").trim() || "ななし";
+          if (!(n in byName) || byName[n] < row.score) byName[n] = Number(row.score);
+        });
+        const uniq = Object.keys(byName).map(function (k) { return { nickname: k, score: byName[k] }; });
+        uniq.sort(function (a, b) { return b.score - a.score; });
+        const top = uniq.slice(0, 100);
+        // 自己ベスト表示(現プレイヤー)
+        const me = (playerName || "").trim();
+        if (me && byName[me] != null && byName[me] > bestScore) { bestScore = byName[me]; saveLocalBest(); }
+        if (top.length === 0) { renderRankRows(lists, [{ muted: "まだ記録がありません" }]); return; }
+        let prev = null, dispRank = 0;
+        const rows = top.map(function (r, i) {
+          if (r.score !== prev) dispRank = i + 1;
+          prev = r.score;
+          return { rank: dispRank, nickname: r.nickname, score: r.score, me: me && r.nickname === me };
+        });
+        renderRankRows(lists, rows);
+      } catch (e) {
+        renderRankRows(lists, [{ muted: "読み込みに失敗しました" }]);
+      }
+    }
+
+    function renderRankRows(lists, rows) {
+      lists.forEach(function (ol) {
+        if (!ol) return;
+        ol.innerHTML = "";
+        rows.forEach(function (r) {
+          const li = document.createElement("li");
+          if (r.muted) { li.className = "muted"; li.textContent = r.muted; ol.appendChild(li); return; }
+          if (r.me) li.classList.add("me");
+          if (r.rank === 1) li.classList.add("r1");
+          const medal = r.rank === 1 ? "🥇" : r.rank === 2 ? "🥈" : r.rank === 3 ? "🥉" : (r.rank + "位");
+          li.innerHTML = '<span class="rk">' + medal + '</span><span class="nm">' + escapeHtml(r.nickname) + '</span><span class="sc">' + r.score + ' 段</span>';
+          ol.appendChild(li);
+        });
+      });
+    }
+    function escapeHtml(s) { return String(s).replace(/[&<>"']/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]; }); }
+
+    /* ===================== Screens ===================== */
+    const startScreen = document.getElementById("start-screen");
+    const overScreen = document.getElementById("over-screen");
+    function showStart() { startScreen.classList.remove("hidden"); overScreen.classList.add("hidden"); loadRanking(); }
+    function showOver() { overScreen.classList.remove("hidden"); }
+    function hideAll() { startScreen.classList.add("hidden"); overScreen.classList.add("hidden"); }
+
+    function startGame() {
+      const input = document.getElementById("nickname-input");
+      playerName = (input.value || "").trim();
+      try { localStorage.setItem("purple_stacker_nick", playerName); } catch (e) {}
+      loadLocalBest();
+      previousBest = bestScore;
+      hideAll();
+      resetGame();
+    }
+
+    /* ===================== Wire up ===================== */
+    document.getElementById("btn-start").addEventListener("click", startGame);
+    document.getElementById("nickname-input").addEventListener("keydown", function (e) { if (e.key === "Enter") startGame(); });
+    document.getElementById("btn-retry").addEventListener("click", function () {
+      previousBest = bestScore; hideAll(); resetGame();
+    });
+    document.getElementById("btn-top").addEventListener("click", function () { state = "start"; showStart(); });
+
+    document.getElementById("btn-share").addEventListener("click", async function () {
+      const text = "🟣Purple Stackerで " + score + "段 積み上げた！パプ太郎とレンガ積みに挑戦🧱 #PurpleStacker";
+      const url = location.href;
+      try {
+        if (navigator.share) { await navigator.share({ title: "Purple Stacker", text: text, url: url }); }
+        else { await navigator.clipboard.writeText(text + " " + url); toast("記録をコピーしました！"); }
+      } catch (e) {}
+    });
+
+    function bindRankArrows(prevId, nextId) {
+      const p = document.getElementById(prevId), n = document.getElementById(nextId);
+      if (p) p.addEventListener("click", function () { rankIdx = (rankIdx - 1 + rankModes.length) % rankModes.length; loadRanking(); });
+      if (n) n.addEventListener("click", function () { rankIdx = (rankIdx + 1) % rankModes.length; loadRanking(); });
+    }
+    bindRankArrows("rank-prev", "rank-next");
+    bindRankArrows("rank-prev2", "rank-next2");
+
+    let toastTimer = null;
+    function toast(msg) {
+      const el = document.getElementById("toast");
+      el.textContent = msg; el.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(function () { el.classList.remove("show"); }, 1800);
+    }
+
+    // ピンチズーム抑止
+    document.addEventListener("touchmove", function (e) {
+      if (e.touches && e.touches.length >= 2) e.preventDefault();
+    }, { passive: false });
+
+    /* ===================== Init ===================== */
+    try {
+      const saved = localStorage.getItem("purple_stacker_nick");
+      if (saved) document.getElementById("nickname-input").value = saved;
+    } catch (e) {}
+
+    // 検証用フック(?debug 指定時のみ)
+    if (location.search.indexOf("debug") >= 0) {
+      window.__stacker = {
+        start: startGame, drop: dropBrick,
+        center: function () { pap.x = bricks.length ? bricks[bricks.length - 1].cx : CX; },
+        nudge: function (dx) { pap.x = (bricks.length ? bricks[bricks.length - 1].cx : CX) + dx; },
+        get state() { return state; },
+        get score() { return score; },
+        get bricks() { return bricks.length; },
+        get falling() { return !!falling; },
+        get com() { return comOffset; }
+      };
+    }
+
+    showStart();
+  })();
+  </script>
+</body>
+</html>
