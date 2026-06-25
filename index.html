@@ -543,7 +543,7 @@
 
       // 難易度: パプ太郎が速くなる
       // 高く積むほどパプ太郎が「ほんの少しずつ」速くなる(これが難易度)
-      pap.speed = clamp(3.2 + bricks.length * 0.04, 3.2, 7.5);
+      pap.speed = clamp(3.2 + bricks.length * 0.034, 3.2, 10.0);
       // 背景フェーズ
       bgPhase = bricks.length <= 15 ? 0 : bricks.length <= 30 ? 1 : bricks.length <= 50 ? 2 : 3;
       // 風(20段以降)
@@ -571,7 +571,7 @@
         sfxFanfare();
         flash = Math.max(flash, 0.4);
       }
-      pap.speed = clamp(3.2 + bricks.length * 0.04, 3.2, 7.5);
+      pap.speed = clamp(3.2 + bricks.length * 0.034, 3.2, 10.0);
       bgPhase = bricks.length <= 15 ? 0 : bricks.length <= 30 ? 1 : bricks.length <= 50 ? 2 : 3;
       updateCamera();
     }
