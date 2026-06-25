@@ -152,8 +152,6 @@
           <button id="btn-start" class="primary-btn">ゲームスタート</button>
 
           <div class="how">
-            🧱 パプ太郎が右へ流れる…<b>右端に着く前にタップ</b>で落とそう！<br>
-            ⚖️ 重心が外れると<b>倒壊</b>…！傾いたら<b>逆側</b>へ立て直そう<br>
             🏃 高く積むほどパプ太郎が<b>少しずつ速く</b>なる…！<br>
             🏆 何<b>段</b>積めるか世界中のプレイヤーと競おう
           </div>
@@ -407,7 +405,7 @@
     function resetGame() {
       bricks = [];
       falling = null;
-      pap = { x: -30, speed: 3.2, holding: true }; // 左から登場・ブロックを持って右へ流れる
+      pap = { x: -30, speed: 3.2, holding: true, carry: 1 }; // 左から登場・ブロックを持って右へ流れる
       comOffset = 0; renderLean = 0; leanVel = 0;
       combo = 0; score = 0;
       particles = []; popups = []; debris = [];
@@ -423,8 +421,8 @@
     function dropBrick() {
       if (state !== "playing" || falling) return;
       if (!pap.holding || pap.x < 24) return; // 持っていない/まだ画面外なら落とせない
-      // パプ太郎の足元から落とす
-      falling = { cx: pap.x, y: (PAP_Y + 26) - cameraShift, vy: 0.6 };
+      // パプ太郎の足元から落とす(2個持ちなら縦2段まとめて)
+      falling = { cx: pap.x, y: (PAP_Y + 26) - cameraShift, vy: 0.6, count: pap.carry };
       pap.holding = false; // このパスのブロックは投下済み
       papDrop = 1; // 落とすモーション開始
       sfxTap();
@@ -514,6 +512,25 @@
 
     function addBrickToStack(cx, perfect) {
       bricks.push({ cx: cx, level: bricks.length, w: BRICK_W, perfect: perfect });
+    }
+
+    // 2個持ちパプ太郎の2段目: 1段目の真上に積む(同じx=重心変化なし・ピッタリ扱い)
+    function placeSecondBrick() {
+      const belowCx = bricks[bricks.length - 1].cx;
+      addBrickToStack(belowCx, true);
+      score = bricks.length;
+      recomputeLean(); // 同じxなので重心は変わらない=1段目で崩れていなければ安全
+      const surfY = topSurfaceNoCam() + BRICK_H + cameraShift;
+      spawnDust(belowCx, surfY, true);
+      if (score > 0 && score % 10 === 0) {
+        banner = { text: score + "段 達成！", life: 1.4 };
+        setEmote("🎉");
+        sfxFanfare();
+        flash = Math.max(flash, 0.4);
+      }
+      pap.speed = clamp(3.2 + bricks.length * 0.04, 3.2, 7.5);
+      bgPhase = bricks.length < 12 ? 0 : bricks.length < 25 ? 1 : bricks.length < 45 ? 2 : 3;
+      updateCamera();
     }
 
     // 落とし損ね(持ったまま右端到達)。タワーは崩れない専用ゲームオーバー。
@@ -764,6 +781,7 @@
       if (!falling) return;
       const y = falling.y + cameraShift;
       brickFace(falling.cx, y, BRICK_W, BRICK_H, false);
+      if (falling.count === 2) brickFace(falling.cx, y - BRICK_H, BRICK_W, BRICK_H, false); // 上にもう1段
     }
 
     function drawPaptaro(t) {
@@ -781,9 +799,11 @@
       // 影
       ctx.fillStyle = "rgba(0,0,0,0.15)";
       ctx.beginPath(); ctx.ellipse(0, PAP_H / 2 + 4, 22, 5, 0, 0, Math.PI * 2); ctx.fill();
-      // 運んでいるレンガ(持っている間だけ)。落とす瞬間は下へ離れる
+      // 運んでいるレンガ(持っている間だけ)。落とす瞬間は下へ離れる。2個持ちは縦2段
       if (pap.holding && state === "playing") {
-        brickFace(0, PAP_H / 2 - 4 + papDrop * 12, 44, 14, false);
+        const by = PAP_H / 2 - 4 + papDrop * 12;
+        brickFace(0, by, 44, 14, false);
+        if (pap.carry === 2) brickFace(0, by - 13, 44, 14, false);
       }
       // パプ太郎本体(画像)。未ロード時は紫の丸で代替
       if (papReady) {
@@ -1025,8 +1045,12 @@
           // 持ったまま右端に到達 → 落とし損ね(Missed)
           if (pap.x >= W - margin) { pap.x = W - margin; gameOverMiss(); }
         } else {
-          // 投下済み → 右へ抜けたら左から新しいブロックで再登場
-          if (pap.x > W + 40) { pap.x = -30; pap.holding = true; }
+          // 投下済み → 右へ抜けたら左から新しいブロックで再登場(10%で2個持ち)
+          if (pap.x > W + 40) {
+            pap.x = -30; pap.holding = true;
+            pap.carry = Math.random() < 0.10 ? 2 : 1;
+            if (pap.carry === 2) setEmote("2️⃣");
+          }
         }
 
         // 落下中レンガ
@@ -1034,7 +1058,12 @@
           falling.vy += DROP_GRAV * dt;
           falling.y += falling.vy * dt;
           const landY = topSurfaceNoCam() - BRICK_H; // 新レンガ上面がここに来たら接地
-          if (falling.y >= landY) { falling.y = landY; placeBrick(); }
+          if (falling.y >= landY) {
+            falling.y = landY;
+            const dbl = falling.count === 2;
+            placeBrick();
+            if (dbl && state === "playing") placeSecondBrick();
+          }
         }
 
         // 揺れは「バネ＋減衰の振り子」で物理的に表現(自然なゆらゆら)。
