@@ -482,22 +482,23 @@
       vibrate([40, 30, 90]);
       stopWobble();
       sfxCollapse();
-      // 全レンガを物理デブリ化
+      // 全レンガを物理デブリ化。重い側へ「倒れる」ように、
+      // 上のレンガほど大きく横へ振れて落ちる(縁を支点に転倒)。
       const dir = comOffset >= 0 ? 1 : -1;
-      const pivotScreenY = FOUND_TOP + cameraShift;
       for (let i = 0; i < bricks.length; i++) {
         const b = bricks[i];
-        const by = FOUND_TOP - (b.level + 1) * BRICK_H + cameraShift;
+        const h = b.level + 1; // 上ほど大きい
+        const by = FOUND_TOP - h * BRICK_H + cameraShift;
         debris.push({
           x: b.cx, y: by, w: BRICK_W, h: BRICK_H,
-          vx: dir * rand(0.5, 3.5) + (b.cx - CX) * 0.02,
-          vy: rand(-4, -1),
-          va: dir * rand(0.02, 0.12), ang: 0,
+          vx: dir * (0.6 + h * 0.22) + rand(-0.4, 0.4),
+          vy: rand(-1.2, 0.4),
+          va: dir * (0.03 + h * 0.006), ang: 0,
           perfect: b.perfect
         });
       }
       bricks = [];
-      setTimeout(finishGame, 1200);
+      setTimeout(finishGame, 1400);
     }
 
     async function finishGame() {
@@ -644,8 +645,14 @@
       if (bricks.length === 0) return;
       const pivotX = CX;
       const pivotY = FOUND_TOP + cameraShift;
+      // 一番下のレンガが土台にめり込まないよう、傾けた分だけ持ち上げる
+      // (実際の物体が縁を支点に傾くのと同じ＝沈み込まない)
+      const halfW = BRICK_W / 2;
+      const b0 = bricks[0].cx - CX;
+      const s = Math.sin(renderLean);
+      const dip = Math.max(0, (b0 - halfW) * s, (b0 + halfW) * s);
       ctx.save();
-      ctx.translate(pivotX, pivotY);
+      ctx.translate(pivotX, pivotY - dip);
       ctx.rotate(renderLean);
       for (let i = 0; i < bricks.length; i++) {
         const b = bricks[i];
@@ -832,10 +839,14 @@
           if (falling.y >= landY) { falling.y = landY; placeBrick(); }
         }
 
-        // 重心 → 傾き(見た目)。風で微振動
-        leanAngle = clamp(comOffset * 0.0055, -0.42, 0.42);
-        const sway = Math.sin(t * 0.004) * wind * 0.02;
-        renderLean += (leanAngle + sway - renderLean) * 0.12 * dt;
+        // 立っている間はほぼ直立。レンガは水平にまっすぐ積む。
+        // バランスが悪い(重心が縁に近い)ほど、タワー全体が小さくグラグラ揺れる。
+        const danger = clamp(Math.abs(comOffset) / LEAN_LIMIT, 0, 1);
+        const wobbleAmp = danger > 0.35 ? ((danger - 0.35) / 0.65) * 0.05 : 0;
+        const wobble = Math.sin(t * 0.02) * wobbleAmp;          // 速い揺れ＝グラグラ感
+        const tilt = clamp(comOffset * 0.0011, -0.03, 0.03);     // 重い側へごく僅か傾く
+        const windSway = Math.sin(t * 0.004) * wind * 0.015;
+        renderLean += (tilt + wobble + windSway - renderLean) * 0.2 * dt;
       } else if (state === "over") {
         // デブリ物理
         for (const d of debris) {
