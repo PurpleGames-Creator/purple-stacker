@@ -240,8 +240,9 @@
     const FOUND_W = 120;          // 土台の幅
     const FOUND_H = 40;
     const FOUND_TOP = H - 70;     // 土台上面のスクリーンY(カメラ無し)
-    const BAL_SENS = 0.13;        // 高さ感度。高く積むほど同じズレが大きく効く(難易度上昇)
-    const BAL_LIMIT = 120;        // バランス値がこれを超えると倒壊
+    const BAL_LIMIT = 120;        // バランス値(傾き)がこれを超えると倒壊
+    const BAL_REF = 45;           // 「今どれだけ傾いているか」の基準。小さいほど不安定が増幅しやすい
+    const BAL_HSENS = 0.05;       // 高さ係数。傾いている時ほど&高い時ほど新たなズレが増幅する
     const SLIDE_LIMIT = BRICK_W * 0.72; // 直下からこれ以上ズレると即落下
     const PERFECT_EPS = 3;        // パーフェクト判定(px) ※スナップ＆コンボ
     const GREAT_EPS = 8;          // グレート判定(px)
@@ -370,9 +371,13 @@
 
     function topSurfaceNoCam() { return FOUND_TOP - bricks.length * BRICK_H; }
 
-    // 着地時のズレをバランス値に加算。高い段ほど感度が高い(高く積むほどシビア)
+    // 着地時のズレをバランス値に加算。
+    // 影響度 = 今どれだけ傾いているか(instab) × 高さ。
+    // タワーが綺麗(傾き≈0)なら高所でもほぼ等倍=崩れにくい。
+    // 既に傾いている&高いほど、新たなズレが雪だるま式に増幅する。
     function applyBalance(offset, level) {
-      const sens = 1 + level * BAL_SENS;
+      const instab = Math.abs(comOffset) / BAL_REF;
+      const sens = 1 + instab * (1 + level * BAL_HSENS);
       comOffset += offset * sens;
     }
 
