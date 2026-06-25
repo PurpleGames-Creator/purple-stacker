@@ -117,12 +117,6 @@
     .btn-retry { color: #fff; background: linear-gradient(135deg, #9333ea, #6d28d9); }
     .btn-sub { color: #d9caff; background: rgba(168,130,255,0.18); border: 1px solid rgba(168,130,255,0.35) !important; }
     .btn-row button:active { transform: scale(0.97); }
-    .share-btn {
-      width: 100%; margin-top: 10px; padding: 11px; font-size: 14px; font-weight: 700;
-      color: #0b0617; background: linear-gradient(135deg, #f0c674, #ffb703);
-      border: none; border-radius: 12px; cursor: pointer;
-    }
-    .share-btn:active { transform: scale(0.97); }
     .hidden { display: none !important; }
     .toast {
       position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
@@ -182,7 +176,6 @@
           <div class="new-record" id="new-record">✨ 自己ベスト更新！ ✨</div>
           <div class="result-score">今回の記録　<b id="res-current">0</b> 段</div>
           <div class="result-score">自己ベスト　<span id="res-best">0</span> 段</div>
-          <button id="btn-share" class="share-btn">📣 記録をシェア</button>
           <div class="btn-row">
             <button id="btn-retry" class="btn-retry">もう一回</button>
             <button id="btn-top" class="btn-sub">トップへ</button>
@@ -1209,15 +1202,6 @@
       try { localStorage.setItem("purple_stacker_muted", muted ? "1" : "0"); } catch (e2) {}
       refreshMuteBtn();
       if (!muted) { audio(); sfxTap(); }
-    });
-
-    document.getElementById("btn-share").addEventListener("click", async function () {
-      const text = "🟣Purple Stackerで " + score + "段 積み上げた！パプ太郎とレンガ積みに挑戦🧱 #PurpleStacker";
-      const url = location.href;
-      try {
-        if (navigator.share) { await navigator.share({ title: "Purple Stacker", text: text, url: url }); }
-        else { await navigator.clipboard.writeText(text + " " + url); toast("記録をコピーしました！"); }
-      } catch (e) {}
     });
 
     function bindRankArrows(prevId, nextId) {
