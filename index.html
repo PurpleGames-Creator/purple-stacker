@@ -250,6 +250,11 @@
     const PAP_Y = 70;             // パプ太郎のスクリーンY(固定)
     const TARGET_TOP_SCREEN = H * 0.46; // 積み上げ面を保つ画面位置
     const DROP_GRAV = 0.9;
+    // 揺れ(バネ＋減衰の振り子モデル)
+    const SWAY_OMEGA0 = 0.20;     // 基本の角振動数(高いほど速い)。塔が高いとゆっくりになる
+    const SWAY_DAMP0 = 0.13;      // 基本の減衰(大きいほど早く収まる)
+    const SWAY_TILTMAX = 0.05;    // 重い側へ傾く平衡角の最大
+    const SWAY_KICK = 0.05;       // 着地時に与える揺れの強さ
 
     /* ===================== State ===================== */
     let state = "start"; // start | playing | over
@@ -257,8 +262,8 @@
     let falling = null;  // {cx, y, vy}  y = no-camera top
     let pap = { x: CX, dir: 1, speed: 2.0 };
     let comOffset = 0;   // バランス値(符号付き)。高いほど傾き大。±BAL_LIMITで倒壊
-    let leanAngle = 0;
-    let renderLean = 0;
+    let renderLean = 0;  // 見た目の傾き角(バネ＋減衰で物理的に揺れる)
+    let leanVel = 0;     // 傾きの角速度
     let combo = 0;
     let score = 0;
     let bestScore = 0;
@@ -390,7 +395,7 @@
       bricks = [];
       falling = null;
       pap = { x: CX, dir: Math.random() < 0.5 ? -1 : 1, speed: 2.0 };
-      comOffset = 0; leanAngle = 0; renderLean = 0;
+      comOffset = 0; renderLean = 0; leanVel = 0;
       combo = 0; score = 0;
       particles = []; popups = []; debris = [];
       shake = 0; wind = 0; windTarget = 0; flash = 0;
@@ -465,6 +470,10 @@
 
       // バランスへ加算(パーフェクトは0=タワーを安定させる)。高い段ほど大きく効く
       applyBalance(isPerfect ? 0 : offset, bricks.length - 1);
+
+      // 着地の衝撃で揺れを励起(ズレが大きい&不安定なほど大きくゆれる。精密なら揺れない)
+      const impactDanger = Math.abs(comOffset) / BAL_LIMIT;
+      leanVel += (offset / BRICK_W) * SWAY_KICK * (0.5 + impactDanger);
 
       // バランス限界オーバー → 倒壊
       if (Math.abs(comOffset) > BAL_LIMIT) {
@@ -833,15 +842,18 @@
           if (falling.y >= landY) { falling.y = landY; placeBrick(); }
         }
 
-        // 立っている間はほぼ直立。レンガは水平にまっすぐ積む。
-        // バランスが悪い(重心が縁に近い)ほど、タワー全体が小さくグラグラ揺れる。
+        // 揺れは「バネ＋減衰の振り子」で物理的に表現(自然なゆらゆら)。
+        // 高いほどゆっくり揺れ、不安定なほど減衰が弱く長く揺れる。
         const ratio = clamp(comOffset / BAL_LIMIT, -1, 1);
         const danger = Math.abs(ratio);
-        const wobbleAmp = danger > 0.35 ? ((danger - 0.35) / 0.65) * 0.05 : 0;
-        const wobble = Math.sin(t * 0.02) * wobbleAmp;          // 速い揺れ＝グラグラ感
-        const tilt = ratio * 0.045;                              // 重い側へ僅かに傾く
-        const windSway = Math.sin(t * 0.004) * wind * 0.015;
-        renderLean += (tilt + wobble + windSway - renderLean) * 0.2 * dt;
+        const target = ratio * SWAY_TILTMAX;                       // 重い側へ傾く平衡角
+        const omega = SWAY_OMEGA0 / (1 + bricks.length * 0.03);    // 高い塔ほどゆっくり
+        const damp = SWAY_DAMP0 * (1 - danger * 0.75);             // 不安定ほど長く揺れる
+        const accel = -(omega * omega) * (renderLean - target) - damp * leanVel;
+        leanVel += accel * dt;
+        leanVel += wind * 0.00018 * dt;                            // 風でゆらす
+        renderLean += leanVel * dt;
+        renderLean = clamp(renderLean, -0.4, 0.4);
       } else if (state === "over") {
         // デブリ物理
         for (const d of debris) {
