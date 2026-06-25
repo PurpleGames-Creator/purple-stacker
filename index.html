@@ -152,6 +152,7 @@
           <button id="btn-start" class="primary-btn">ゲームスタート</button>
 
           <div class="how">
+            🧱 パプ太郎が右へ流れる…<b>右端に着く前にタップ</b>で落とそう！<br>
             ⚖️ 重心が外れると<b>倒壊</b>…！傾いたら<b>逆側</b>へ立て直そう<br>
             🏃 高く積むほどパプ太郎が<b>少しずつ速く</b>なる…！<br>
             🏆 何<b>段</b>積めるか世界中のプレイヤーと競おう
@@ -171,7 +172,7 @@
       <!-- GAME OVER -->
       <div id="over-screen" class="overlay hidden">
         <div class="card">
-          <div class="title" style="font-size:24px;">💥 TIMBER! 💥</div>
+          <div id="over-title" class="title" style="font-size:24px;">💥 TIMBER! 💥</div>
           <div class="subtitle" id="over-nick"></div>
           <div class="new-record" id="new-record">✨ 自己ベスト更新！ ✨</div>
           <div class="result-score">今回の記録　<b id="res-current">0</b> 段</div>
@@ -277,6 +278,8 @@
     let papFall = null;  // 倒壊時にパプ太郎が落ちる {x,y,vy,ang,va}
     let topScore = 0;    // ランキング1位の段数(ゴーストライン用)
     let collapseZoom = 1;   // 倒壊時のズームアウト
+    let doCollapseZoom = false; // 倒壊(タワー崩壊)時のみズーム演出
+    let overReason = "";    // "collapse"(バランス倒壊) / "miss"(落とし損ね)
     let flyers = [];     // 背景の鳥/飛行機/流れ星
     let flyerTimer = 90;
 
@@ -355,6 +358,11 @@
       const ns = [523, 659, 784, 1047]; // ドミソド↑
       ns.forEach((n, i) => tone(n, 0.18, "triangle", 0.24, null, i * 0.08));
     }
+    function sfxMiss() {
+      // しょんぼり下降音
+      tone(440, 0.18, "triangle", 0.26, 300);
+      tone(300, 0.28, "sine", 0.22, 150, 0.12);
+    }
 
     function setEmote(sym) { emote.sym = sym; emote.life = 1.2; }
     // グラグラ音(危険時に鳴り続ける)
@@ -399,14 +407,14 @@
     function resetGame() {
       bricks = [];
       falling = null;
-      pap = { x: CX, dir: Math.random() < 0.5 ? -1 : 1, speed: 2.0 };
+      pap = { x: -30, speed: 2.0, holding: true }; // 左から登場・ブロックを持って右へ流れる
       comOffset = 0; renderLean = 0; leanVel = 0;
       combo = 0; score = 0;
       particles = []; popups = []; debris = [];
       shake = 0; wind = 0; windTarget = 0; flash = 0;
       bgPhase = 0;
       papHop = 0; papDrop = 0; emote = { sym: "", life: 0 }; banner = { text: "", life: 0 };
-      papFall = null; collapseZoom = 1; flyers = []; flyerTimer = 90;
+      papFall = null; collapseZoom = 1; doCollapseZoom = false; overReason = ""; flyers = []; flyerTimer = 90;
       state = "playing";
       updateCamera();
       cameraShift = cameraTarget;
@@ -414,8 +422,10 @@
 
     function dropBrick() {
       if (state !== "playing" || falling) return;
+      if (!pap.holding || pap.x < 24) return; // 持っていない/まだ画面外なら落とせない
       // パプ太郎の足元から落とす
       falling = { cx: pap.x, y: (PAP_Y + 26) - cameraShift, vy: 0.6 };
+      pap.holding = false; // このパスのブロックは投下済み
       papDrop = 1; // 落とすモーション開始
       sfxTap();
     }
@@ -506,9 +516,28 @@
       bricks.push({ cx: cx, level: bricks.length, w: BRICK_W, perfect: perfect });
     }
 
+    // 落とし損ね(持ったまま右端到達)。タワーは崩れない専用ゲームオーバー。
+    function gameOverMiss() {
+      if (state !== "playing") return;
+      state = "over";
+      overReason = "miss";
+      doCollapseZoom = false;
+      shake = 8;
+      flash = 0.3;
+      vibrate([60, 40, 60]);
+      stopWobble();
+      sfxMiss();
+      setEmote("😵");
+      // パプ太郎が右下へ落ちていく
+      papFall = { x: pap.x, y: PAP_Y, vx: 3, vy: -2, ang: 0, va: 0.16 };
+      setTimeout(finishGame, 1300);
+    }
+
     function collapse(reason) {
       if (state !== "playing") return;
       state = "over";
+      overReason = "collapse";
+      doCollapseZoom = true;
       shake = 22;
       flash = 0.7;
       vibrate([40, 30, 90]);
@@ -518,7 +547,7 @@
       // ドラマチック演出: ズームアウト＋カメラを土台へ
       collapseZoom = 1;
       // パプ太郎も一緒に落ちる
-      papFall = { x: pap.x, y: PAP_Y, vy: -3, ang: 0, va: dir * 0.12 };
+      papFall = { x: pap.x, y: PAP_Y, vx: dir * 1.5, vy: -3, ang: 0, va: dir * 0.12 };
       // 全レンガを物理デブリ化。重い側へ「倒れる」ように、
       // 上のレンガほど大きく横へ振れて落ちる(縁を支点に転倒)。
       for (let i = 0; i < bricks.length; i++) {
@@ -543,6 +572,8 @@
       if (score > bestScore) bestScore = score;
       saveLocalBest();
       // 画面
+      const overTitleEl = document.getElementById("over-title");
+      if (overTitleEl) overTitleEl.textContent = overReason === "miss" ? "🤦 落とし損ね！ 🤦" : "💥 TIMBER! 💥";
       document.getElementById("over-nick").textContent = "プレイヤー: " + (playerName || "ななしさん");
       document.getElementById("res-current").textContent = score;
       document.getElementById("res-best").textContent = bestScore;
@@ -750,8 +781,8 @@
       // 影
       ctx.fillStyle = "rgba(0,0,0,0.15)";
       ctx.beginPath(); ctx.ellipse(0, PAP_H / 2 + 4, 22, 5, 0, 0, Math.PI * 2); ctx.fill();
-      // 運んでいるレンガ(落下中でなければ)。落とす瞬間は下へ離れる
-      if (!falling && state === "playing") {
+      // 運んでいるレンガ(持っている間だけ)。落とす瞬間は下へ離れる
+      if (pap.holding && state === "playing") {
         brickFace(0, PAP_H / 2 - 4 + papDrop * 12, 44, 14, false);
       }
       // パプ太郎本体(画像)。未ロード時は紫の丸で代替
@@ -987,11 +1018,16 @@
       updateFlyers(dt, t);
 
       if (state === "playing") {
-        // パプ太郎の往復移動
-        const margin = 28;
-        pap.x += pap.dir * pap.speed * dt + wind * 0.3 * dt;
-        if (pap.x < margin) { pap.x = margin; pap.dir = 1; }
-        if (pap.x > W - margin) { pap.x = W - margin; pap.dir = -1; }
+        // パプ太郎は左→右へ一方向に流れる(ベルトコンベア式)
+        const margin = 30;
+        pap.x += pap.speed * dt;
+        if (pap.holding) {
+          // 持ったまま右端に到達 → 落とし損ね(Missed)
+          if (pap.x >= W - margin) { pap.x = W - margin; gameOverMiss(); }
+        } else {
+          // 投下済み → 右へ抜けたら左から新しいブロックで再登場
+          if (pap.x > W + 40) { pap.x = -30; pap.holding = true; }
+        }
 
         // 落下中レンガ
         if (falling) {
@@ -1025,12 +1061,14 @@
         renderLean += (0 - renderLean) * 0.1 * dt;
         // パプ太郎の落下
         if (papFall) {
-          papFall.vy += 0.5 * dt; papFall.x += (comOffset >= 0 ? 1 : -1) * 1.5 * dt;
+          papFall.vy += 0.5 * dt; papFall.x += papFall.vx * dt;
           papFall.y += papFall.vy * dt; papFall.ang += papFall.va * dt;
         }
-        // ズームアウトして全体を見せる＋カメラを土台へ
-        collapseZoom += (0.78 - collapseZoom) * 0.06 * dt;
-        cameraTarget = 0;
+        // 倒壊時のみズームアウト＋カメラを土台へ(Missedはタワー維持)
+        if (doCollapseZoom) {
+          collapseZoom += (0.78 - collapseZoom) * 0.06 * dt;
+          cameraTarget = 0;
+        }
       }
 
       if (state !== "playing") stopWobble();
