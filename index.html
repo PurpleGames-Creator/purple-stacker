@@ -248,14 +248,22 @@
     let papReady = false;
     papImg.onload = function () { papReady = true; };
     papImg.src = "paptaro.png";
+
+    // BGM(プレイ中ループ)
+    const bgm = new Audio("bgm.mp3");
+    bgm.loop = true;
+    bgm.volume = 0.4;
+    bgm.preload = "auto";
+    function playBgm() { try { bgm.play(); } catch (e) {} }
+    function stopBgm() { try { bgm.pause(); } catch (e) {} }
     const PAP_W = 62, PAP_H = Math.round(62 * 572 / 502); // 画像比率を保持
 
     /* ===================== Config ===================== */
     const BRICK_W = 92;
     const BRICK_H = 26;
     const FOUND_W = 120;          // 土台の幅
-    const FOUND_H = 40;
-    const FOUND_TOP = H - 70;     // 土台上面のスクリーンY(カメラ無し)
+    const FOUND_H = 10 * BRICK_H; // 土台を10段ぶんの高さに(めちゃくちゃ高い見た目)
+    const FOUND_TOP = H - 30 - FOUND_H; // 地面ラインは従来通り(H-30)、そこから上へ10段ぶん
     // バランス＝いちばん上のレンガの中心からのズレ。見た目＝メーター＝判定。
     const BAL_TOL = 50;           // 倒壊許容(高さによらず一定)。難易度はパプ太郎の速度で表現
     const SLIDE_LIMIT = BRICK_W * 0.72; // 直下からこれ以上ズレると即落下
@@ -484,6 +492,8 @@
       state = "playing";
       updateCamera();
       cameraShift = cameraTarget;
+      try { bgm.currentTime = 0; } catch (e) {}
+      playBgm();
     }
 
     function dropBrick() {
@@ -655,6 +665,7 @@
     }
 
     async function finishGame() {
+      stopBgm();
       // ベスト判定
       const isNew = score > previousBest;
       if (score > bestScore) bestScore = score;
@@ -1393,6 +1404,7 @@
     function goToTop() {
       paused = false;
       stopWobble();
+      stopBgm();
       document.getElementById("pause-screen").classList.add("hidden");
       document.getElementById("home-confirm").classList.add("hidden");
       state = "start";
@@ -1404,8 +1416,8 @@
     const homeConfirm = document.getElementById("home-confirm");
     function setPause(p) {
       paused = p;
-      if (p) pauseScreen.classList.remove("hidden");
-      else pauseScreen.classList.add("hidden");
+      if (p) { pauseScreen.classList.remove("hidden"); stopBgm(); }
+      else { pauseScreen.classList.add("hidden"); playBgm(); }
     }
     document.getElementById("btn-pause").addEventListener("click", function (e) {
       e.stopPropagation();
@@ -1420,6 +1432,7 @@
       e.stopPropagation();
       if (state !== "playing") return;
       paused = true; // 確認中は止める
+      stopBgm();
       homeConfirm.classList.remove("hidden");
     });
     document.getElementById("btn-home-yes").addEventListener("click", function (e) { e.stopPropagation(); goToTop(); });
@@ -1428,6 +1441,7 @@
       homeConfirm.classList.add("hidden");
       if (!pauseScreen.classList.contains("hidden")) return; // 一時停止中なら止めたまま
       paused = false;
+      playBgm();
     });
 
     function bindRankArrows(prevId, nextId) {
