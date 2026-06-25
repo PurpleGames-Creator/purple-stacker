@@ -503,7 +503,7 @@
       // 高く積むほどパプ太郎が「ほんの少しずつ」速くなる(これが難易度)
       pap.speed = clamp(3.2 + bricks.length * 0.04, 3.2, 7.5);
       // 背景フェーズ
-      bgPhase = bricks.length < 12 ? 0 : bricks.length < 25 ? 1 : bricks.length < 45 ? 2 : 3;
+      bgPhase = bricks.length <= 15 ? 0 : bricks.length <= 30 ? 1 : bricks.length <= 50 ? 2 : 3;
       // 風(20段以降)
       if (bricks.length >= 20 && Math.random() < 0.04) windTarget = rand(-1, 1);
 
@@ -529,7 +529,7 @@
         flash = Math.max(flash, 0.4);
       }
       pap.speed = clamp(3.2 + bricks.length * 0.04, 3.2, 7.5);
-      bgPhase = bricks.length < 12 ? 0 : bricks.length < 25 ? 1 : bricks.length < 45 ? 2 : 3;
+      bgPhase = bricks.length <= 15 ? 0 : bricks.length <= 30 ? 1 : bricks.length <= 50 ? 2 : 3;
       updateCamera();
     }
 
@@ -915,14 +915,18 @@
       const fromLeft = Math.random() < 0.5;
       const sx = fromLeft ? -40 : W + 40;
       const dir = fromLeft ? 1 : -1;
-      if (bgPhase <= 1) {
-        if (Math.random() < 0.4) {
-          flyers.push({ kind: "plane", x: sx, y: 50 + Math.random() * 110, vx: dir * (1.2 + Math.random()), vy: 0, dir: dir, t: 0 });
-        } else {
-          flyers.push({ kind: "bird", x: sx, y: 70 + Math.random() * 220, vx: dir * (1.4 + Math.random() * 1.4), vy: 0, dir: dir, t: 0 });
-        }
-      } else {
+      if (bgPhase === 0) {
+        // 昼: 鳥だけ
+        flyers.push({ kind: "bird", x: sx, y: 70 + Math.random() * 220, vx: dir * (1.4 + Math.random() * 1.4), vy: 0, dir: dir, t: 0 });
+      } else if (bgPhase === 1) {
+        // 夕方: 飛行機だけ
+        flyers.push({ kind: "plane", x: sx, y: 50 + Math.random() * 110, vx: dir * (1.2 + Math.random()), vy: 0, dir: dir, t: 0 });
+      } else if (bgPhase === 2) {
+        // 夜: 流れ星だけ
         flyers.push({ kind: "star", x: Math.random() * W, y: -20, vx: (Math.random() < 0.5 ? -1 : 1) * (3 + Math.random() * 2), vy: 4 + Math.random() * 3, dir: 1, t: 0 });
+      } else {
+        // 宇宙: UFOだけ
+        flyers.push({ kind: "ufo", x: sx, y: 60 + Math.random() * 160, vx: dir * (1.0 + Math.random() * 1.2), vy: 0, dir: dir, t: 0 });
       }
     }
     function updateFlyers(dt) {
@@ -963,6 +967,26 @@
           ctx.strokeStyle = "rgba(255,255,255,0.85)"; ctx.lineWidth = 2; ctx.lineCap = "round";
           ctx.beginPath(); ctx.moveTo(f.x, f.y); ctx.lineTo(f.x - f.vx * 4, f.y - f.vy * 4); ctx.stroke();
           ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(f.x, f.y, 1.8, 0, Math.PI * 2); ctx.fill();
+        } else if (f.kind === "ufo") {
+          ctx.save(); ctx.translate(f.x, f.y + Math.sin(f.t * 0.1) * 3);
+          // 下向きのビーム(うっすら)
+          ctx.fillStyle = "rgba(150,255,180,0.10)";
+          ctx.beginPath(); ctx.moveTo(-7, 5); ctx.lineTo(7, 5); ctx.lineTo(16, 28); ctx.lineTo(-16, 28); ctx.closePath(); ctx.fill();
+          // 円盤本体
+          const gg = ctx.createLinearGradient(0, -5, 0, 8);
+          gg.addColorStop(0, "#d6dbf0"); gg.addColorStop(1, "#7b86a8");
+          ctx.fillStyle = gg;
+          ctx.beginPath(); ctx.ellipse(0, 2, 18, 6, 0, 0, Math.PI * 2); ctx.fill();
+          // ドーム(コックピット)
+          ctx.fillStyle = "rgba(185,235,255,0.9)";
+          ctx.beginPath(); ctx.ellipse(0, 0, 8, 7, 0, Math.PI, 0); ctx.fill();
+          // 縁のライト(点滅)
+          for (let k = -2; k <= 2; k++) {
+            const on = (Math.floor(f.t * 0.2) + k) % 2 === 0;
+            ctx.fillStyle = on ? "#ffe24d" : "#ff5db0";
+            ctx.beginPath(); ctx.arc(k * 7, 4, 1.7, 0, Math.PI * 2); ctx.fill();
+          }
+          ctx.restore();
         }
       }
     }
