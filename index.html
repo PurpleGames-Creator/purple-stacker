@@ -227,14 +227,21 @@
     const H = canvas.height;  // 640
     const CX = W / 2;
 
+    // パプ太郎の画像
+    const papImg = new Image();
+    let papReady = false;
+    papImg.onload = function () { papReady = true; };
+    papImg.src = "paptaro.png";
+    const PAP_W = 62, PAP_H = Math.round(62 * 572 / 502); // 画像比率を保持
+
     /* ===================== Config ===================== */
     const BRICK_W = 92;
     const BRICK_H = 26;
     const FOUND_W = 120;          // 土台の幅
     const FOUND_H = 40;
     const FOUND_TOP = H - 70;     // 土台上面のスクリーンY(カメラ無し)
-    const ANCHOR_W = 1;           // 土台の重し(小さいほどシビア)
-    const LEAN_LIMIT = 44;        // 重心がここを超えると倒壊(px)
+    const BAL_SENS = 0.13;        // 高さ感度。高く積むほど同じズレが大きく効く(難易度上昇)
+    const BAL_LIMIT = 120;        // バランス値がこれを超えると倒壊
     const SLIDE_LIMIT = BRICK_W * 0.72; // 直下からこれ以上ズレると即落下
     const PERFECT_EPS = 3;        // パーフェクト判定(px) ※スナップ＆コンボ
     const GREAT_EPS = 8;          // グレート判定(px)
@@ -248,7 +255,7 @@
     let bricks = [];     // {cx, level, w, perfect}
     let falling = null;  // {cx, y, vy}  y = no-camera top
     let pap = { x: CX, dir: 1, speed: 2.0 };
-    let comOffset = 0;   // 重心の中心からのズレ(px)
+    let comOffset = 0;   // バランス値(符号付き)。高いほど傾き大。±BAL_LIMITで倒壊
     let leanAngle = 0;
     let renderLean = 0;
     let combo = 0;
@@ -363,11 +370,10 @@
 
     function topSurfaceNoCam() { return FOUND_TOP - bricks.length * BRICK_H; }
 
-    function recomputeCOM() {
-      let sum = CX * ANCHOR_W;
-      let cnt = ANCHOR_W;
-      for (let i = 0; i < bricks.length; i++) { sum += bricks[i].cx; cnt++; }
-      comOffset = (sum / cnt) - CX;
+    // 着地時のズレをバランス値に加算。高い段ほど感度が高い(高く積むほどシビア)
+    function applyBalance(offset, level) {
+      const sens = 1 + level * BAL_SENS;
+      comOffset += offset * sens;
     }
 
     function updateCamera() {
@@ -391,8 +397,8 @@
 
     function dropBrick() {
       if (state !== "playing" || falling) return;
-      // パプ太郎の手元から落とす
-      falling = { cx: pap.x, y: (PAP_Y + 14) - cameraShift, vy: 0.6 };
+      // パプ太郎の足元から落とす
+      falling = { cx: pap.x, y: (PAP_Y + 26) - cameraShift, vy: 0.6 };
       papDrop = 1; // 落とすモーション開始
       sfxTap();
     }
@@ -452,10 +458,11 @@
         popups.push({ x: cx, y: surfY - 28, life: 0.9, text: "-" + absOff.toFixed(0) + "px", color: "#ffb3b3" });
       }
 
-      recomputeCOM();
+      // バランスへ加算(パーフェクトは0=タワーを安定させる)。高い段ほど大きく効く
+      applyBalance(isPerfect ? 0 : offset, bricks.length - 1);
 
-      // 重心オーバー → 倒壊
-      if (Math.abs(comOffset) > LEAN_LIMIT) {
+      // バランス限界オーバー → 倒壊
+      if (Math.abs(comOffset) > BAL_LIMIT) {
         collapse("lean");
         return;
       }
@@ -690,7 +697,7 @@
         const surfScreen = topSurfaceNoCam() + cameraShift;
         const belowCx = bricks.length > 0 ? bricks[bricks.length - 1].cx : CX;
         ctx.strokeStyle = "rgba(255,255,255,0.13)"; ctx.lineWidth = 2; ctx.setLineDash([3, 7]);
-        ctx.beginPath(); ctx.moveTo(x, y + 26); ctx.lineTo(x, surfScreen); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x, y + PAP_H / 2 + 12); ctx.lineTo(x, surfScreen); ctx.stroke();
         ctx.setLineDash([]);
         // 直下中心の目印(ここに合わせるとPERFECT)
         ctx.fillStyle = "rgba(255,233,150,0.8)";
@@ -701,40 +708,22 @@
 
       ctx.save();
       ctx.translate(x, y + bob);
-      ctx.scale(1 + papDrop * 0.08, 1 - papDrop * 0.12); // 落とす時の踏ん張り
+      ctx.scale(1 + papDrop * 0.06, 1 - papDrop * 0.1); // 落とす時の踏ん張り
       // 影
       ctx.fillStyle = "rgba(0,0,0,0.15)";
-      ctx.beginPath(); ctx.ellipse(0, 22, 18, 5, 0, 0, Math.PI * 2); ctx.fill();
-      // 腕(落とす時に下へ伸びる)
-      const armY = 8 + papDrop * 9;
-      const armSpread = 13 - papDrop * 3;
-      ctx.strokeStyle = "#7c3aed"; ctx.lineWidth = 4; ctx.lineCap = "round";
-      ctx.beginPath();
-      ctx.moveTo(-10, 2); ctx.lineTo(-armSpread, armY);
-      ctx.moveTo(10, 2); ctx.lineTo(armSpread, armY);
-      ctx.stroke();
-      // 手
-      ctx.fillStyle = "#c79bff";
-      ctx.beginPath(); ctx.arc(-armSpread, armY, 3.5, 0, Math.PI * 2); ctx.arc(armSpread, armY, 3.5, 0, Math.PI * 2); ctx.fill();
-      // 体(紫の丸キャラ)
-      const g = ctx.createRadialGradient(-5, -5, 4, 0, 0, 20);
-      g.addColorStop(0, "#c79bff"); g.addColorStop(1, "#7c3aed");
-      ctx.fillStyle = g;
-      ctx.beginPath(); ctx.arc(0, 0, 17, 0, Math.PI * 2); ctx.fill();
-      // ほっぺ
-      ctx.fillStyle = "rgba(255,150,200,0.5)";
-      ctx.beginPath(); ctx.arc(-8, 4, 3, 0, Math.PI * 2); ctx.arc(8, 4, 3, 0, Math.PI * 2); ctx.fill();
-      // 目
-      ctx.fillStyle = "#1a0b33";
-      ctx.beginPath(); ctx.arc(-6, -2, 2.6, 0, Math.PI * 2); ctx.arc(6, -2, 2.6, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = "#fff";
-      ctx.beginPath(); ctx.arc(-5, -3, 1, 0, Math.PI * 2); ctx.arc(7, -3, 1, 0, Math.PI * 2); ctx.fill();
-      // 口
-      ctx.strokeStyle = "#1a0b33"; ctx.lineWidth = 1.4;
-      ctx.beginPath(); ctx.arc(0, 3, 4, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
-      // 手に持ったレンガ(落下中でなければ)。落とす瞬間は手から離れる
+      ctx.beginPath(); ctx.ellipse(0, PAP_H / 2 + 4, 22, 5, 0, 0, Math.PI * 2); ctx.fill();
+      // 運んでいるレンガ(落下中でなければ)。落とす瞬間は下へ離れる
       if (!falling && state === "playing") {
-        brickFace(0, 16 + papDrop * 9, 40, 14, false);
+        brickFace(0, PAP_H / 2 - 4 + papDrop * 12, 44, 14, false);
+      }
+      // パプ太郎本体(画像)。未ロード時は紫の丸で代替
+      if (papReady) {
+        ctx.drawImage(papImg, -PAP_W / 2, -PAP_H / 2, PAP_W, PAP_H);
+      } else {
+        const g = ctx.createRadialGradient(-5, -5, 4, 0, 0, 24);
+        g.addColorStop(0, "#c79bff"); g.addColorStop(1, "#7c3aed");
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(0, 0, 22, 0, Math.PI * 2); ctx.fill();
       }
       ctx.restore();
     }
@@ -790,9 +779,9 @@
       ctx.fillStyle = "rgba(120,220,140,0.25)";
       roundRect(mx + mw * (0.5 - safeRatio / 2), my, mw * safeRatio, mh, 5); ctx.fill();
       // マーカー
-      const ratio = clamp(comOffset / (LEAN_LIMIT * 1.1), -1, 1);
+      const ratio = clamp(comOffset / BAL_LIMIT, -1, 1);
       const px = mx + mw / 2 + ratio * (mw / 2 - 6);
-      const danger = Math.abs(comOffset) / LEAN_LIMIT;
+      const danger = Math.abs(comOffset) / BAL_LIMIT;
       ctx.fillStyle = danger > 0.8 ? "#ff5d5d" : danger > 0.55 ? "#ffd76b" : "#a0e8b0";
       ctx.beginPath(); ctx.arc(px, my + mh / 2, 8, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = "rgba(255,255,255,0.7)"; ctx.lineWidth = 1.5; ctx.stroke();
@@ -841,10 +830,11 @@
 
         // 立っている間はほぼ直立。レンガは水平にまっすぐ積む。
         // バランスが悪い(重心が縁に近い)ほど、タワー全体が小さくグラグラ揺れる。
-        const danger = clamp(Math.abs(comOffset) / LEAN_LIMIT, 0, 1);
+        const ratio = clamp(comOffset / BAL_LIMIT, -1, 1);
+        const danger = Math.abs(ratio);
         const wobbleAmp = danger > 0.35 ? ((danger - 0.35) / 0.65) * 0.05 : 0;
         const wobble = Math.sin(t * 0.02) * wobbleAmp;          // 速い揺れ＝グラグラ感
-        const tilt = clamp(comOffset * 0.0011, -0.03, 0.03);     // 重い側へごく僅か傾く
+        const tilt = ratio * 0.045;                              // 重い側へ僅かに傾く
         const windSway = Math.sin(t * 0.004) * wind * 0.015;
         renderLean += (tilt + wobble + windSway - renderLean) * 0.2 * dt;
       } else if (state === "over") {
