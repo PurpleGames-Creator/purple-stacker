@@ -244,8 +244,7 @@
     const BAL_HSENS = 0.05;       // 高さ係数。傾いている時ほど&高い時ほど新たなズレが増幅する
     const SLIDE_LIMIT = BRICK_W * 0.72; // 直下からこれ以上ズレると即落下
     const PERFECT_EPS = 3;        // パーフェクト判定(px) ※スナップ＆コンボ
-    const GREAT_EPS = 8;          // グレート判定(px)
-    const GOOD_EPS = 18;          // グッド判定(px)
+    const GOOD_EPS = 18;          // これ以内のズレは「Good!」、超えるとノーリアクション
     const PAP_Y = 70;             // パプ太郎のスクリーンY(固定)
     const TARGET_TOP_SCREEN = H * 0.46; // 積み上げ面を保つ画面位置
     const DROP_GRAV = 0.9;
@@ -452,10 +451,10 @@
 
       const absOff = Math.abs(offset);
       lastAccuracy = absOff;
-      // 着地精度ティア
+      // 着地精度: ピッタリ=PERFECT / 少しズレ=Good! / それ以上=ノーリアクション
       const isPerfect = absOff <= PERFECT_EPS;
-      const isGreat = !isPerfect && absOff <= GREAT_EPS;
-      const isGood = !isGreat && !isPerfect && absOff <= GOOD_EPS;
+      const isGood = !isPerfect && absOff <= GOOD_EPS;
+      const dirLabel = (offset >= 0 ? "右" : "左") + Math.round(absOff); // 例: 右2 / 左6
 
       let cx = falling.cx;
       if (isPerfect) cx = belowCx; // パーフェクトのみ吸着
@@ -466,7 +465,7 @@
 
       // 着地エフェクト(新レンガ底面の接地点)
       const surfY = topSurfaceNoCam() + BRICK_H + cameraShift;
-      spawnDust(cx, surfY, isPerfect || isGreat);
+      spawnDust(cx, surfY, isPerfect);
       sfxLand();
 
       if (isPerfect) {
@@ -477,20 +476,13 @@
         papHop = 1; // 喜びジャンプ
         setEmote(combo >= 5 ? "🔥" : "😆");
         popups.push({ x: cx, y: surfY - 30, life: 1, text: combo >= 2 ? "PERFECT x" + combo : "PERFECT!", color: "#ffe9b8" });
-      } else if (isGreat) {
-        combo = 0;
-        vibrate(16);
-        sfxGreat();
-        popups.push({ x: cx, y: surfY - 30, life: 1, text: "GREAT  " + absOff.toFixed(0) + "px", color: "#bdf0ff" });
       } else if (isGood) {
         combo = 0;
         vibrate(12);
         sfxGood();
-        popups.push({ x: cx, y: surfY - 30, life: 1, text: "GOOD  " + absOff.toFixed(0) + "px", color: "#d8c8ff" });
+        popups.push({ x: cx, y: surfY - 30, life: 1, text: "Good! " + dirLabel, color: "#bdf0ff" });
       } else {
-        combo = 0;
-        vibrate(10);
-        popups.push({ x: cx, y: surfY - 28, life: 0.9, text: "-" + absOff.toFixed(0) + "px", color: "#ffb3b3" });
+        combo = 0; // ノーリアクション(段数と揺れだけ)
       }
 
       // バランスへ加算(パーフェクトは0=タワーを安定させる)。高い段ほど大きく効く
