@@ -275,6 +275,8 @@
     let banner = { text: "", life: 0 }; // マイルストーン等の中央バナー
     let papFall = null;  // 倒壊時にパプ太郎が落ちる {x,y,vy,ang,va}
     let topScore = 0;    // ランキング1位の段数(ゴーストライン用)
+    let rankAllScores = []; // 全プレイヤーのベスト段数(降順)。順位アップ表示用
+    let recordBroken = false; // この試合で自己ベストを更新したか(生演出の発火管理)
     let collapseZoom = 1;   // 倒壊時のズームアウト
     let doCollapseZoom = false; // 倒壊(タワー崩壊)時のみズーム演出
     let overReason = "";    // "collapse"(バランス倒壊) / "miss"(落とし損ね)
@@ -361,6 +363,12 @@
       tone(440, 0.18, "triangle", 0.26, 300);
       tone(300, 0.28, "sine", 0.22, 150, 0.12);
     }
+    function sfxRecord() {
+      // 自己ベスト更新: 派手な上昇アルペジオ
+      const ns = [523, 659, 784, 1047, 1319];
+      ns.forEach((n, i) => tone(n, 0.2, "triangle", 0.26, null, i * 0.06));
+      tone(392, 0.5, "sine", 0.14, null, 0.05);
+    }
 
     function setEmote(sym) { emote.sym = sym; emote.life = 1.2; }
     // グラグラ音(危険時に鳴り続ける)
@@ -397,6 +405,36 @@
       return BAL_TOL;
     }
 
+    // 自己ベストを超えた瞬間の生演出(1試合1回)
+    function checkRecord() {
+      if (recordBroken || previousBest <= 0 || score <= previousBest) return;
+      recordBroken = true;
+      banner = { text: "🎉 自己ベスト更新！ 🎉", life: 1.8 };
+      setEmote("🏆");
+      sfxRecord();
+      vibrate([20, 30, 20, 30, 60]);
+      flash = Math.max(flash, 0.5);
+      const surfY = topSurfaceNoCam() + cameraShift;
+      for (let i = 0; i < 30; i++) {
+        const a = rand(0, Math.PI * 2), sp = rand(2, 6);
+        particles.push({ x: CX, y: surfY, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 2, life: 1, size: rand(3, 6), color: Math.random() < 0.5 ? "#ffe24d" : "#ff5db0" });
+      }
+    }
+
+    // 現在の全国順位と、1つ上の順位までの必要段数
+    function nextRankInfo() {
+      if (!rankAllScores || rankAllScores.length === 0 || score <= 0) return null;
+      let above = 0, nextTarget = Infinity;
+      for (const s of rankAllScores) {
+        if (s > score) { above++; if (s < nextTarget) nextTarget = s; }
+      }
+      const rank = above + 1;
+      if (above === 0) return { rank: 1, top: true };
+      let aboveNext = 0;
+      for (const s of rankAllScores) if (s > nextTarget) aboveNext++;
+      return { rank: rank, top: false, need: nextTarget - score + 1, newRank: aboveNext + 1 };
+    }
+
     function updateCamera() {
       cameraTarget = Math.max(0, TARGET_TOP_SCREEN - topSurfaceNoCam());
     }
@@ -413,6 +451,7 @@
       bgPhase = 0;
       papHop = 0; papDrop = 0; emote = { sym: "", life: 0 }; banner = { text: "", life: 0 };
       papFall = null; collapseZoom = 1; doCollapseZoom = false; overReason = ""; flyers = []; flyerTimer = 90;
+      recordBroken = false;
       state = "playing";
       updateCamera();
       cameraShift = cameraTarget;
@@ -491,12 +530,15 @@
         return;
       }
 
-      // マイルストーン(10段ごと)演出
-      if (score > 0 && score % 10 === 0) {
-        banner = { text: score + "段 達成！", life: 1.4 };
-        setEmote("🎉");
-        sfxFanfare();
-        flash = Math.max(flash, 0.4);
+      checkRecord(); // 自己ベスト更新の生演出(マイルストーンより優先したいので先に)
+      // マイルストーン(10段ごと)演出。※ベスト更新演出が出た時は重ねない
+      if (!recordBroken || score !== previousBest + 1) {
+        if (score > 0 && score % 10 === 0) {
+          banner = { text: score + "段 達成！", life: 1.4 };
+          setEmote("🎉");
+          sfxFanfare();
+          flash = Math.max(flash, 0.4);
+        }
       }
 
       // 難易度: パプ太郎が速くなる
@@ -522,6 +564,7 @@
       recomputeLean(); // 同じxなので重心は変わらない=1段目で崩れていなければ安全
       const surfY = topSurfaceNoCam() + BRICK_H + cameraShift;
       spawnDust(belowCx, surfY, true);
+      checkRecord();
       if (score > 0 && score % 10 === 0) {
         banner = { text: score + "段 達成！", life: 1.4 };
         setEmote("🎉");
@@ -866,15 +909,22 @@
         ctx.font = "bold 16px sans-serif"; ctx.fillStyle = "#ffe9b8";
         ctx.fillText("COMBO " + combo, CX, 66);
       }
-      // あと◯段 煽り(自己ベスト/1位が目前)
-      let goal = 0, glabel = "";
-      if (bestScore > score && bestScore - score <= 3) { goal = bestScore; glabel = "🏅自己ベスト"; }
-      else if (topScore > score && topScore - score <= 3) { goal = topScore; glabel = "👑1位"; }
-      if (goal > 0 && combo < 5) {
-        ctx.font = "bold 15px sans-serif"; ctx.fillStyle = "#ffd76b";
-        ctx.strokeStyle = "rgba(0,0,0,0.35)"; ctx.lineWidth = 3;
-        const txt = glabel + "まであと " + (goal - score) + "段！";
-        ctx.strokeText(txt, CX, 86); ctx.fillText(txt, CX, 86);
+      // モチベ表示(1行・優先順位つき)
+      let motiv = "", mcol = "#ffd76b";
+      const ri = nextRankInfo();
+      if (bestScore > 0 && score < bestScore && bestScore - score <= 3) {
+        motiv = "🏅自己ベストまであと " + (bestScore - score) + "段！";
+      } else if (ri && ri.top) {
+        motiv = "🏆 全国1位ペース！"; mcol = "#ffe24d";
+      } else if (ri && ri.need != null && ri.need <= 6) {
+        motiv = "🏆 あと " + ri.need + "段で 全国" + ri.newRank + "位！"; mcol = "#bdf0ff";
+      } else if (recordBroken) {
+        motiv = "🔥 自己ベスト更新中！"; mcol = "#ff9a4d";
+      }
+      if (motiv && combo < 5) {
+        ctx.font = "bold 15px sans-serif"; ctx.fillStyle = mcol;
+        ctx.strokeStyle = "rgba(0,0,0,0.4)"; ctx.lineWidth = 3;
+        ctx.strokeText(motiv, CX, 86); ctx.fillText(motiv, CX, 86);
       }
       ctx.textAlign = "start";
       drawBalanceMeter();
@@ -1232,6 +1282,7 @@
         uniq.sort(function (a, b) { return b.score - a.score; });
         const top = uniq.slice(0, 100);
         topScore = top.length ? top[0].score : 0; // ゴーストライン用(1位の段数)
+        rankAllScores = uniq.map(function (u) { return u.score; }); // 順位アップ表示用(降順)
         // 自己ベスト表示(現プレイヤー)
         const me = (playerName || "").trim();
         if (me && byName[me] != null && byName[me] > bestScore) { bestScore = byName[me]; saveLocalBest(); }
