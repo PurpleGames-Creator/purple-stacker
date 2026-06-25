@@ -250,12 +250,29 @@
     papImg.src = "paptaro.png";
 
     // BGM(プレイ中ループ)
+    const BGM_VOLUME = 0.15; // 効果音(置く音/パーフェクト等)を消さないよう控えめに
     const bgm = new Audio("bgm.mp3");
     bgm.loop = true;
-    bgm.volume = 0.15; // 効果音(置く音/パーフェクト等)を消さないよう控えめに
+    bgm.volume = BGM_VOLUME;
     bgm.preload = "auto";
-    function playBgm() { try { bgm.play(); } catch (e) {} }
-    function stopBgm() { try { bgm.pause(); } catch (e) {} }
+    let bgmFadeTimer = null;
+    function clearBgmFade() { if (bgmFadeTimer) { clearInterval(bgmFadeTimer); bgmFadeTimer = null; } }
+    function playBgm() { clearBgmFade(); bgm.volume = BGM_VOLUME; try { bgm.play(); } catch (e) {} }
+    function stopBgm() { clearBgmFade(); try { bgm.pause(); } catch (e) {} bgm.volume = BGM_VOLUME; }
+    // ゲームオーバー時: 徐々に音量を下げてから停止(余韻のあるフェードアウト)
+    function fadeOutBgm(ms) {
+      clearBgmFade();
+      const step = 50; // 更新間隔(ms)
+      const dec = (bgm.volume || BGM_VOLUME) / Math.max(1, ms / step);
+      bgmFadeTimer = setInterval(function () {
+        bgm.volume = Math.max(0, bgm.volume - dec);
+        if (bgm.volume <= 0.001) {
+          clearBgmFade();
+          try { bgm.pause(); } catch (e) {}
+          bgm.volume = BGM_VOLUME; // 次回再生用に戻す
+        }
+      }, step);
+    }
     const PAP_W = 62, PAP_H = Math.round(62 * 572 / 502); // 画像比率を保持
 
     /* ===================== Config ===================== */
@@ -624,6 +641,7 @@
       flash = 0.3;
       vibrate([60, 40, 60]);
       stopWobble();
+      fadeOutBgm(1300); // 落とし損ね演出に合わせてBGMをフェードアウト
       sfxMiss();
       setEmote("😵");
       // パプ太郎が右下へ落ちていく
@@ -640,6 +658,7 @@
       flash = 0.7;
       vibrate([40, 30, 90]);
       stopWobble();
+      fadeOutBgm(1700); // 倒壊演出に合わせてBGMをフェードアウト
       sfxCollapse();
       const dir = comOffset >= 0 ? 1 : -1;
       // ドラマチック演出: ズームアウト＋カメラを土台へ
