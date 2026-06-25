@@ -1084,14 +1084,16 @@
 
     /* ===================== Render ===================== */
     function render(t) {
+      // 背景・空・フライヤーは常に全画面(ズーム/シェイクの影響を受けない)→ 残像防止
+      drawBackground(t);
+      drawFlyers(t);
+
+      // ゲーム要素のみズーム＆シェイクを適用
       ctx.save();
-      // 倒壊時はズームアウトして崩れる様子を引きで見せる
       if (state === "over" && collapseZoom < 0.999) {
         ctx.translate(CX, H * 0.48); ctx.scale(collapseZoom, collapseZoom); ctx.translate(-CX, -H * 0.48);
       }
       if (shake > 0) ctx.translate(rand(-shake, shake) * 0.5, rand(-shake, shake) * 0.5);
-      drawBackground(t);
-      drawFlyers(t);
       drawWindFx(t);
       if (state === "playing") drawGhostLines();
       drawFoundation();
