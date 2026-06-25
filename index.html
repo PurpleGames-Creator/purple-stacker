@@ -514,8 +514,8 @@
       bricks.push({ cx: cx, level: bricks.length, w: BRICK_W, perfect: perfect });
     }
 
-    // 2個持ちパプ太郎の2段目: 1段目の真上に積む(同じx=重心変化なし・ピッタリ扱い)
-    function placeSecondBrick() {
+    // 2個・3個持ちの追加レンガ: 直前の真上に積む(同じx=重心変化なし・ピッタリ扱い)
+    function placeStackedBrick() {
       const belowCx = bricks[bricks.length - 1].cx;
       addBrickToStack(belowCx, true);
       score = bricks.length;
@@ -780,8 +780,8 @@
     function drawFalling() {
       if (!falling) return;
       const y = falling.y + cameraShift;
-      brickFace(falling.cx, y, BRICK_W, BRICK_H, false);
-      if (falling.count === 2) brickFace(falling.cx, y - BRICK_H, BRICK_W, BRICK_H, false); // 上にもう1段
+      const n = falling.count || 1;
+      for (let k = 0; k < n; k++) brickFace(falling.cx, y - k * BRICK_H, BRICK_W, BRICK_H, false); // 2個・3個持ちは縦に
     }
 
     function drawPaptaro(t) {
@@ -799,11 +799,10 @@
       // 影
       ctx.fillStyle = "rgba(0,0,0,0.15)";
       ctx.beginPath(); ctx.ellipse(0, PAP_H / 2 + 4, 22, 5, 0, 0, Math.PI * 2); ctx.fill();
-      // 運んでいるレンガ(持っている間だけ)。落とす瞬間は下へ離れる。2個持ちは縦2段
+      // 運んでいるレンガ(持っている間だけ)。落とす瞬間は下へ離れる。2個・3個持ちは足元に縦並び
       if (pap.holding && state === "playing") {
-        const by = PAP_H / 2 - 4 + papDrop * 12;
-        brickFace(0, by, 44, 14, false);
-        if (pap.carry === 2) brickFace(0, by - 13, 44, 14, false);
+        const by = PAP_H / 2 - 6 + papDrop * 12;
+        for (let k = 0; k < (pap.carry || 1); k++) brickFace(0, by + k * 13, 44, 14, false);
       }
       // パプ太郎本体(画像)。未ロード時は紫の丸で代替
       if (papReady) {
@@ -1072,8 +1071,10 @@
           // 投下済み → 右へ抜けたら左から新しいブロックで再登場(10%で2個持ち)
           if (pap.x > W + 40) {
             pap.x = -30; pap.holding = true;
-            pap.carry = Math.random() < 0.10 ? 2 : 1;
-            if (pap.carry === 2) setEmote("2️⃣");
+            const r = Math.random();
+            pap.carry = r < 0.10 ? 3 : r < 0.20 ? 2 : 1; // 3個10% / 2個10% / 1個80%
+            if (pap.carry === 3) setEmote("3️⃣");
+            else if (pap.carry === 2) setEmote("2️⃣");
           }
         }
 
@@ -1084,9 +1085,9 @@
           const landY = topSurfaceNoCam() - BRICK_H; // 新レンガ上面がここに来たら接地
           if (falling.y >= landY) {
             falling.y = landY;
-            const dbl = falling.count === 2;
+            const extra = (falling.count || 1) - 1; // 2個・3個持ちの追加分
             placeBrick();
-            if (dbl && state === "playing") placeSecondBrick();
+            for (let k = 0; k < extra && state === "playing"; k++) placeStackedBrick();
           }
         }
 
