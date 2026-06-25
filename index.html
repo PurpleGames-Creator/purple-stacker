@@ -407,7 +407,7 @@
     function resetGame() {
       bricks = [];
       falling = null;
-      pap = { x: -30, speed: 2.0, holding: true }; // 左から登場・ブロックを持って右へ流れる
+      pap = { x: -30, speed: 3.2, holding: true }; // 左から登場・ブロックを持って右へ流れる
       comOffset = 0; renderLean = 0; leanVel = 0;
       combo = 0; score = 0;
       particles = []; popups = []; debris = [];
@@ -503,7 +503,7 @@
 
       // 難易度: パプ太郎が速くなる
       // 高く積むほどパプ太郎が「ほんの少しずつ」速くなる(これが難易度)
-      pap.speed = clamp(2.0 + bricks.length * 0.04, 2.0, 6.5);
+      pap.speed = clamp(3.2 + bricks.length * 0.04, 3.2, 7.5);
       // 背景フェーズ
       bgPhase = bricks.length < 12 ? 0 : bricks.length < 25 ? 1 : bricks.length < 45 ? 2 : 3;
       // 風(20段以降)
