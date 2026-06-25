@@ -152,8 +152,8 @@
           <button id="btn-start" class="primary-btn">ゲームスタート</button>
 
           <div class="how">
-            ⚖️ <b>高ければ高いほど</b>バランスはシビアに…！<br>
-            ↔️ 傾いたら<b>逆側</b>に置いて立て直そう！<br>
+            ⚖️ 重心が外れると<b>倒壊</b>…！傾いたら<b>逆側</b>へ立て直そう<br>
+            🏃 高く積むほどパプ太郎が<b>少しずつ速く</b>なる…！<br>
             🏆 何<b>段</b>積めるか世界中のプレイヤーと競おう
           </div>
 
@@ -233,9 +233,7 @@
     const FOUND_H = 40;
     const FOUND_TOP = H - 70;     // 土台上面のスクリーンY(カメラ無し)
     // バランス＝いちばん上のレンガの中心からのズレ。見た目＝メーター＝判定。
-    const TOL_BASE = 56;          // 低い時の許容(重心がこの範囲なら倒れない)
-    const TOL_SHRINK = 0.42;      // 高く積むほど許容が狭まる(段あたり)。小さいほど優しい
-    const TOL_MIN = 24;           // 許容の下限
+    const BAL_TOL = 50;           // 倒壊許容(高さによらず一定)。難易度はパプ太郎の速度で表現
     const SLIDE_LIMIT = BRICK_W * 0.72; // 直下からこれ以上ズレると即落下
     const PERFECT_EPS = 3;        // パーフェクト判定(px) ※スナップ＆コンボ
     const GOOD_EPS = 18;          // これ以内のズレは「Good!」、超えるとノーリアクション
@@ -388,9 +386,9 @@
     function recomputeLean() {
       comOffset = bricks.length ? (bricks[bricks.length - 1].cx - CX) : 0;
     }
-    // 倒壊許容。高く積むほど狭まる(=高いほど少しのズレで崩れやすい)。
+    // 倒壊許容(高さによらず一定)。
     function balTolerance() {
-      return Math.max(TOL_MIN, TOL_BASE - bricks.length * TOL_SHRINK);
+      return BAL_TOL;
     }
 
     function updateCamera() {
@@ -494,7 +492,8 @@
       }
 
       // 難易度: パプ太郎が速くなる
-      pap.speed = clamp(2.0 + bricks.length * 0.055, 2.0, 5.2);
+      // 高く積むほどパプ太郎が「ほんの少しずつ」速くなる(これが難易度)
+      pap.speed = clamp(2.0 + bricks.length * 0.04, 2.0, 6.5);
       // 背景フェーズ
       bgPhase = bricks.length < 12 ? 0 : bricks.length < 25 ? 1 : bricks.length < 45 ? 2 : 3;
       // 風(20段以降)
@@ -849,7 +848,7 @@
       // 中心線
       ctx.strokeStyle = "rgba(255,255,255,0.85)"; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.moveTo(mx + mw / 2, my - 3); ctx.lineTo(mx + mw / 2, my + mh + 3); ctx.stroke();
-      // マーカー(許容値基準＝高く積むほど同じズレで大きく振れる。端に達した＝倒壊)
+      // マーカー(許容値基準。端に達した＝倒壊)
       ctx.fillStyle = danger > 0.8 ? "#ff4d4d" : danger > 0.55 ? "#ffd23b" : "#ffffff";
       ctx.beginPath(); ctx.arc(px, my + mh / 2, 10, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = "#1b1030"; ctx.lineWidth = 2.5; ctx.stroke();
