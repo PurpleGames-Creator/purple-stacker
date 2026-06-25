@@ -747,17 +747,6 @@
     function drawFalling() {
       if (!falling) return;
       const y = falling.y + cameraShift;
-      // 落下予測ガイド(序盤のみ薄く)
-      if (bricks.length < 6) {
-        const belowCx = bricks.length > 0 ? bricks[bricks.length - 1].cx : CX;
-        const surfScreen = topSurfaceNoCam() + cameraShift; // 現在の積み上げ面
-        ctx.strokeStyle = "rgba(255,255,255,0.18)"; ctx.lineWidth = 2; ctx.setLineDash([4, 6]);
-        ctx.beginPath(); ctx.moveTo(falling.cx, y + BRICK_H); ctx.lineTo(falling.cx, surfScreen); ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.globalAlpha = 0.5; ctx.fillStyle = "#fff";
-        ctx.fillRect(belowCx - 1, surfScreen - 3, 2, 6);
-        ctx.globalAlpha = 1;
-      }
       brickFace(falling.cx, y, BRICK_W, BRICK_H, false);
     }
 
@@ -769,20 +758,6 @@
       const x = pap.x + tremble;
       const y = PAP_Y - hop;
       const bob = Math.sin(t * 0.008) * 2;
-
-      // 照準ガイド(落下位置の目安・常時うっすら)
-      if (!falling) {
-        const surfScreen = topSurfaceNoCam() + cameraShift;
-        const belowCx = bricks.length > 0 ? bricks[bricks.length - 1].cx : CX;
-        ctx.strokeStyle = "rgba(255,255,255,0.13)"; ctx.lineWidth = 2; ctx.setLineDash([3, 7]);
-        ctx.beginPath(); ctx.moveTo(pap.x, PAP_Y + PAP_H / 2 + 12); ctx.lineTo(pap.x, surfScreen); ctx.stroke();
-        ctx.setLineDash([]);
-        // 直下中心の目印(ここに合わせるとPERFECT)
-        ctx.fillStyle = "rgba(255,233,150,0.8)";
-        ctx.beginPath();
-        ctx.moveTo(belowCx, surfScreen - 9); ctx.lineTo(belowCx - 4, surfScreen - 15); ctx.lineTo(belowCx + 4, surfScreen - 15);
-        ctx.closePath(); ctx.fill();
-      }
 
       ctx.save();
       ctx.translate(x, y + bob);
