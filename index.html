@@ -172,7 +172,7 @@
       <!-- GAME OVER -->
       <div id="over-screen" class="overlay hidden">
         <div class="card">
-          <div id="over-title" class="title" style="font-size:24px;">💥 TIMBER! 💥</div>
+          <div id="over-title" class="title" style="font-size:24px;">GAME OVER</div>
           <div class="subtitle" id="over-nick"></div>
           <div class="new-record" id="new-record">✨ 自己ベスト更新！ ✨</div>
           <div class="result-score">今回の記録　<b id="res-current">0</b> 段</div>
@@ -573,7 +573,7 @@
       saveLocalBest();
       // 画面
       const overTitleEl = document.getElementById("over-title");
-      if (overTitleEl) overTitleEl.textContent = overReason === "miss" ? "🤦 落とし損ね！ 🤦" : "💥 TIMBER! 💥";
+      if (overTitleEl) overTitleEl.textContent = "GAME OVER";
       document.getElementById("over-nick").textContent = "プレイヤー: " + (playerName || "ななしさん");
       document.getElementById("res-current").textContent = score;
       document.getElementById("res-best").textContent = bestScore;
