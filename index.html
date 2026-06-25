@@ -17,20 +17,29 @@
       touch-action: manipulation;
     }
     .app {
-      position: fixed; inset: 0;
+      position: fixed; top: 0; left: 0;
+      width: 100%;
+      height: 100vh;   /* 古いブラウザ用フォールバック */
+      height: 100dvh;  /* iOS Safari: ツールバーを除いた実表示領域 */
       display: flex; align-items: center; justify-content: center;
+      /* ノッチ/ホームインジケータ(セーフエリア)を避ける */
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
       background: radial-gradient(circle at 50% 0%, #2a1856 0%, #140a2e 55%, #0b0617 100%);
     }
     .canvas-wrap {
       position: relative;
-      width: 100vw; height: 100vh;
-      max-width: 100vw; max-height: 100vh;
-      display: flex; align-items: center; justify-content: center;
+      display: block;
+      /* 画面に必ず収まる最大サイズを保ちつつ縦横比(360:640)を維持。
+         縦長スマホ=横幅基準 / 横長=高さ基準で自動的にレターボックスになる */
+      width: min(100vw, calc((100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom)) * 360 / 640));
+      width: min(100vw, calc((100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom)) * 360 / 640));
+      max-width: 100%;
+      max-height: 100%;
+      aspect-ratio: 360 / 640;
     }
     canvas {
       display: block;
-      width: auto; height: 100%;
-      max-width: 100vw;
+      width: 100%; height: 100%;
       aspect-ratio: 360 / 640;
       background: #1a1033;
       box-shadow: 0 0 60px rgba(124, 58, 237, 0.35);
