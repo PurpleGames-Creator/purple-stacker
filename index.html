@@ -259,7 +259,7 @@
     papImg.src = "paptaro.png";
 
     // BGM(プレイ中ループ)
-    const BGM_VOLUME = 0.15; // 効果音(置く音/パーフェクト等)を消さないよう控えめに
+    const BGM_VOLUME = 0.07; // 効果音(置く音/パーフェクト等)を消さないよう控えめに
     const bgm = new Audio("bgm.mp3");
     bgm.loop = true;
     bgm.volume = BGM_VOLUME; // ※iOS Safariはvolume無効。WebAudioのGainで制御する
