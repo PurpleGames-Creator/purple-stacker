@@ -252,7 +252,7 @@
     // BGM(プレイ中ループ)
     const bgm = new Audio("bgm.mp3");
     bgm.loop = true;
-    bgm.volume = 0.4;
+    bgm.volume = 0.15; // 効果音(置く音/パーフェクト等)を消さないよう控えめに
     bgm.preload = "auto";
     function playBgm() { try { bgm.play(); } catch (e) {} }
     function stopBgm() { try { bgm.pause(); } catch (e) {} }
