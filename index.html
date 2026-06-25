@@ -836,10 +836,6 @@
         leanAngle = clamp(comOffset * 0.0055, -0.42, 0.42);
         const sway = Math.sin(t * 0.004) * wind * 0.02;
         renderLean += (leanAngle + sway - renderLean) * 0.12 * dt;
-
-        // グラグラ音(危険度に応じて)
-        const danger = Math.abs(comOffset) / LEAN_LIMIT;
-        setWobble(danger > 0.5 ? (danger - 0.5) / 0.5 : 0);
       } else if (state === "over") {
         // デブリ物理
         for (const d of debris) {
