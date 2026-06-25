@@ -867,6 +867,21 @@
       ctx.save();
       ctx.translate(x, y + bob);
       ctx.scale(1 + papDrop * 0.06, 1 - papDrop * 0.1); // 落とす時の踏ん張り
+      // 頭の上の風船(ゆらゆら)
+      const bsx = Math.sin(t * 0.003) * 5, bsy = -PAP_H / 2 - 26;
+      ctx.strokeStyle = "rgba(70,55,110,0.55)"; ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(0, -PAP_H / 2 + 4);
+      ctx.quadraticCurveTo(bsx * 0.5, bsy + 18, bsx, bsy + 13);
+      ctx.stroke();
+      const bg = ctx.createRadialGradient(bsx - 4, bsy - 5, 2, bsx, bsy, 15);
+      bg.addColorStop(0, "#ffb3d9"); bg.addColorStop(1, "#e84393");
+      ctx.fillStyle = bg;
+      ctx.beginPath(); ctx.ellipse(bsx, bsy, 12, 15, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.45)";
+      ctx.beginPath(); ctx.ellipse(bsx - 4, bsy - 5, 3, 4.5, -0.4, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#e84393";
+      ctx.beginPath(); ctx.moveTo(bsx - 3, bsy + 14); ctx.lineTo(bsx + 3, bsy + 14); ctx.lineTo(bsx, bsy + 18); ctx.closePath(); ctx.fill();
       // 影
       ctx.fillStyle = "rgba(0,0,0,0.15)";
       ctx.beginPath(); ctx.ellipse(0, PAP_H / 2 + 4, 22, 5, 0, 0, Math.PI * 2); ctx.fill();
