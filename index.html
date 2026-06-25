@@ -125,15 +125,18 @@
       border: 1px solid rgba(168,130,255,0.4);
     }
     .toast.show { opacity: 1; }
-    .mute-btn {
-      position: absolute; top: 10px; right: 10px; z-index: 8;
-      width: 38px; height: 38px; border-radius: 50%;
+    .ctrl-btn {
+      position: absolute; top: 10px; z-index: 8;
+      width: 40px; height: 40px; border-radius: 50%;
       border: 1px solid rgba(168,130,255,0.4);
-      background: rgba(13,7,30,0.55); color: #fff; font-size: 18px;
+      background: rgba(13,7,30,0.6); color: #fff; font-size: 18px;
       cursor: pointer; display: flex; align-items: center; justify-content: center;
       backdrop-filter: blur(2px);
     }
-    .mute-btn:active { transform: scale(0.92); }
+    .ctrl-btn:active { transform: scale(0.92); }
+    .ctrl-left { left: 10px; }
+    .ctrl-right { right: 10px; }
+    .ctrl-btn.hidden { display: none; }
   </style>
 </head>
 <body>
@@ -190,7 +193,29 @@
         </div>
       </div>
 
-      <button id="btn-mute" class="mute-btn" aria-label="サウンド切替">🔊</button>
+      <button id="btn-home" class="ctrl-btn ctrl-left" aria-label="ホーム">🏠</button>
+      <button id="btn-pause" class="ctrl-btn ctrl-right" aria-label="一時停止">⏸</button>
+
+      <!-- 一時停止 -->
+      <div id="pause-screen" class="overlay hidden">
+        <div class="card" style="max-width:300px;">
+          <div class="title" style="font-size:26px;">⏸ 一時停止</div>
+          <button id="btn-resume" class="primary-btn">▶ 再開</button>
+          <button id="btn-pause-top" class="btn-sub" style="width:100%; margin-top:10px; padding:12px; border-radius:12px; cursor:pointer;">トップへ戻る</button>
+        </div>
+      </div>
+
+      <!-- ホーム確認 -->
+      <div id="home-confirm" class="overlay hidden">
+        <div class="card" style="max-width:300px;">
+          <div class="subtitle" style="font-size:17px; color:#f4f0ff; margin:10px 0 16px;">トップに戻りますか？</div>
+          <div class="btn-row">
+            <button id="btn-home-yes" class="btn-retry">はい</button>
+            <button id="btn-home-no" class="btn-sub">いいえ</button>
+          </div>
+        </div>
+      </div>
+
       <div id="toast" class="toast"></div>
     </div>
   </div>
@@ -280,6 +305,7 @@
     let collapseZoom = 1;   // 倒壊時のズームアウト
     let doCollapseZoom = false; // 倒壊(タワー崩壊)時のみズーム演出
     let overReason = "";    // "collapse"(バランス倒壊) / "miss"(落とし損ね)
+    let paused = false;     // 一時停止/ホーム確認中
     let flyers = [];     // 背景の鳥/飛行機/流れ星
     let flyerTimer = 90;
 
@@ -452,13 +478,16 @@
       papHop = 0; papDrop = 0; emote = { sym: "", life: 0 }; banner = { text: "", life: 0 };
       papFall = null; collapseZoom = 1; doCollapseZoom = false; overReason = ""; flyers = []; flyerTimer = 90;
       recordBroken = false;
+      paused = false;
+      var ps = document.getElementById("pause-screen"); if (ps) ps.classList.add("hidden");
+      var hc = document.getElementById("home-confirm"); if (hc) hc.classList.add("hidden");
       state = "playing";
       updateCamera();
       cameraShift = cameraTarget;
     }
 
     function dropBrick() {
-      if (state !== "playing" || falling) return;
+      if (state !== "playing" || paused || falling) return;
       if (!pap.holding || pap.x < 24) return; // 持っていない/まだ画面外なら落とせない
       // パプ太郎の足元から落とす(2個持ちなら縦2段まとめて)
       falling = { cx: pap.x, y: (PAP_Y + 26) - cameraShift, vy: 0.6, count: pap.carry };
@@ -486,7 +515,6 @@
       // 着地精度: ピッタリ=PERFECT / 少しズレ=Good! / それ以上=ノーリアクション
       const isPerfect = absOff <= PERFECT_EPS;
       const isGood = !isPerfect && absOff <= GOOD_EPS;
-      const dirLabel = (offset >= 0 ? "右" : "左") + Math.round(absOff); // 例: 右2 / 左6
 
       let cx = falling.cx;
       if (isPerfect) cx = belowCx; // パーフェクトのみ吸着
@@ -512,7 +540,7 @@
         combo = 0;
         vibrate(12);
         sfxGood();
-        popups.push({ x: cx, y: surfY - 30, life: 1, text: "Good! " + dirLabel, color: "#bdf0ff" });
+        popups.push({ x: cx, y: surfY - 30, life: 1, text: "Good!", color: "#bdf0ff" });
       } else {
         combo = 0; // ノーリアクション(段数と揺れだけ)
       }
@@ -1122,9 +1150,7 @@
           if (pap.x > W + 40) {
             pap.x = -30; pap.holding = true;
             const r = Math.random();
-            pap.carry = r < 0.10 ? 3 : r < 0.20 ? 2 : 1; // 3個10% / 2個10% / 1個80%
-            if (pap.carry === 3) setEmote("3️⃣");
-            else if (pap.carry === 2) setEmote("2️⃣");
+            pap.carry = r < 0.15 ? 3 : r < 0.35 ? 2 : 1; // 3個15% / 2個20% / 1個65%
           }
         }
 
@@ -1216,10 +1242,16 @@
     function loop(now) {
       const ms = Math.min(50, now - last); last = now;
       const dt = ms / (1000 / 60) || 1;
-      update(dt, now);
+      if (!paused) update(dt, now);
       render(now);
+      // 操作ボタンはプレイ中のみ表示
+      const show = (state === "playing");
+      ctrlHome.classList.toggle("hidden", !show);
+      ctrlPause.classList.toggle("hidden", !show);
       requestAnimationFrame(loop);
     }
+    const ctrlHome = document.getElementById("btn-home");
+    const ctrlPause = document.getElementById("btn-pause");
     requestAnimationFrame(loop);
 
     /* ===================== Input ===================== */
@@ -1340,19 +1372,47 @@
     document.getElementById("btn-retry").addEventListener("click", function () {
       previousBest = bestScore; hideAll(); resetGame();
     });
-    document.getElementById("btn-top").addEventListener("click", function () { state = "start"; stopWobble(); showStart(); });
+    document.getElementById("btn-top").addEventListener("click", function () { goToTop(); });
 
-    // ミュート切替
-    try { muted = localStorage.getItem("purple_stacker_muted") === "1"; } catch (e) {}
-    const muteBtn = document.getElementById("btn-mute");
-    function refreshMuteBtn() { muteBtn.textContent = muted ? "🔇" : "🔊"; }
-    refreshMuteBtn();
-    muteBtn.addEventListener("click", function (e) {
+    // トップへ戻る共通処理
+    function goToTop() {
+      paused = false;
+      stopWobble();
+      document.getElementById("pause-screen").classList.add("hidden");
+      document.getElementById("home-confirm").classList.add("hidden");
+      state = "start";
+      showStart();
+    }
+
+    // 一時停止 / 再開
+    const pauseScreen = document.getElementById("pause-screen");
+    const homeConfirm = document.getElementById("home-confirm");
+    function setPause(p) {
+      paused = p;
+      if (p) pauseScreen.classList.remove("hidden");
+      else pauseScreen.classList.add("hidden");
+    }
+    document.getElementById("btn-pause").addEventListener("click", function (e) {
       e.stopPropagation();
-      setMuted(!muted);
-      try { localStorage.setItem("purple_stacker_muted", muted ? "1" : "0"); } catch (e2) {}
-      refreshMuteBtn();
-      if (!muted) { audio(); sfxTap(); }
+      if (state !== "playing") return;
+      setPause(!paused);
+    });
+    document.getElementById("btn-resume").addEventListener("click", function (e) { e.stopPropagation(); setPause(false); });
+    document.getElementById("btn-pause-top").addEventListener("click", function (e) { e.stopPropagation(); goToTop(); });
+
+    // ホーム(左上) → 「トップに戻りますか？」確認
+    document.getElementById("btn-home").addEventListener("click", function (e) {
+      e.stopPropagation();
+      if (state !== "playing") return;
+      paused = true; // 確認中は止める
+      homeConfirm.classList.remove("hidden");
+    });
+    document.getElementById("btn-home-yes").addEventListener("click", function (e) { e.stopPropagation(); goToTop(); });
+    document.getElementById("btn-home-no").addEventListener("click", function (e) {
+      e.stopPropagation();
+      homeConfirm.classList.add("hidden");
+      if (!pauseScreen.classList.contains("hidden")) return; // 一時停止中なら止めたまま
+      paused = false;
     });
 
     function bindRankArrows(prevId, nextId) {
