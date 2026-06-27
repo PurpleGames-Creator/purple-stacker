@@ -376,7 +376,8 @@
     let emote = { sym: "", life: 0 };  // パプ太郎の吹き出し絵文字
     let banner = { text: "", life: 0 }; // マイルストーン等の中央バナー
     let papFall = null;  // 倒壊時にパプ太郎が落ちる {x,y,vy,ang,va}
-    let topScore = 0;    // ランキング1位の段数(ゴーストライン用)
+    let topScore = 0;    // 選択中ランキングの1位段数(順位表示の補助。ゴーストラインには未使用)
+    let todayTop = [];   // 今日の上位段数 [{rank,score}] 最大3件(ゴーストライン用。選択タブと無関係に常に「今日」)
     let rankAllScores = []; // 全プレイヤーのベスト段数(降順)。順位アップ表示用
     let recordBroken = false; // この試合で自己ベストを更新したか(生演出の発火管理)
     let collapseZoom = 1;   // 倒壊時のズームアウト
@@ -1177,9 +1178,19 @@
       ctx.fillStyle = color; ctx.fillText(label, W - 8, y - 4);
       ctx.textAlign = "start";
     }
+    const TODAY_GHOST = [
+      { medal: "🥇 今日の1位 ", color: "rgba(125,222,255,0.95)" },
+      { medal: "🥈 今日の2位 ", color: "rgba(220,224,235,0.92)" },
+      { medal: "🥉 今日の3位 ", color: "rgba(231,178,124,0.95)" }
+    ];
     function drawGhostLines() {
       drawGhostLine(bestScore, "🏅 自己ベスト " + bestScore + "段", "rgba(255,215,107,0.9)");
-      if (topScore !== bestScore) drawGhostLine(topScore, "👑 1位 " + topScore + "段", "rgba(125,222,255,0.9)");
+      // 選択タブに関わらず「今日の1位/2位/3位」を表示(自己ベストと同段の線は重複回避で省略)
+      todayTop.forEach(function (t) {
+        const g = TODAY_GHOST[t.rank - 1];
+        if (!g || t.score === bestScore) return;
+        drawGhostLine(t.score, g.medal + t.score + "段", g.color);
+      });
     }
     function drawBanner() {
       if (banner.life <= 0) return;
@@ -1390,7 +1401,37 @@
       return null;
     }
 
+    // ゴーストライン用：選択タブに関わらず常に「今日」のトップ3段数を取得
+    async function loadTodayTop3() {
+      const client = getSupa();
+      if (!client) return;
+      try {
+        const now = new Date();
+        const from = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+        const { data, error } = await client.from(RANKING_TABLE)
+          .select("nickname, score, created_at")
+          .gte("created_at", from)
+          .order("score", { ascending: false })
+          .limit(3000);
+        if (error) return;
+        const byName = {};
+        (data || []).forEach(function (row) {
+          const n = (row.nickname || "").trim() || "ななし";
+          if (!(n in byName) || byName[n] < row.score) byName[n] = Number(row.score);
+        });
+        const uniq = Object.keys(byName).map(function (k) { return byName[k]; });
+        uniq.sort(function (a, b) { return b - a; });
+        // 段数の異なる上位3つを 1位/2位/3位 として採用(同段は1本に集約)
+        const distinct = [];
+        for (let i = 0; i < uniq.length && distinct.length < 3; i++) {
+          if (distinct.length === 0 || distinct[distinct.length - 1] !== uniq[i]) distinct.push(uniq[i]);
+        }
+        todayTop = distinct.map(function (s, i) { return { rank: i + 1, score: s }; });
+      } catch (e) {}
+    }
+
     async function loadRanking() {
+      loadTodayTop3(); // 今日トップ3(ゴーストライン)も併せて更新
       const titles = [document.getElementById("rank-title"), document.getElementById("rank-title2")];
       const lists = [document.getElementById("rank-list"), document.getElementById("rank-list2")];
       titles.forEach(function (el) { if (el) el.textContent = rankLabel(); });
