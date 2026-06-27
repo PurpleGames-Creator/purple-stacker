@@ -64,6 +64,20 @@
       box-shadow: 0 20px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08);
       -webkit-overflow-scrolling: touch;
     }
+    .home-logo-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 6px;
+      border-radius: 12px;
+      text-decoration: none;
+    }
+    .home-logo-image {
+      display: block;
+      width: clamp(64px, 18vw, 96px);
+      height: auto;
+      filter: drop-shadow(0 0 6px rgba(168, 130, 255, 0.4));
+    }
     .title {
       font-size: 30px; font-weight: 800; letter-spacing: 1px;
       background: linear-gradient(90deg, #c4a0ff, #f0e6ff, #a855f7);
@@ -156,6 +170,9 @@
       <!-- START -->
       <div id="start-screen" class="overlay">
         <div class="card">
+          <a class="home-logo-link" href="https://purple-park.vercel.app/" aria-label="Purple Park へ移動">
+            <img src="logo.png" alt="Purple Park ロゴ" class="home-logo-image" draggable="false" />
+          </a>
           <div class="title">🟣 Purple Stacker 🟣</div>
           <div class="subtitle">パプ太郎とレンガを積み上げろ</div>
 
