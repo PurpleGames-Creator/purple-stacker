@@ -95,6 +95,8 @@
       outline: none;
     }
     .nick-input:focus { border-color: #a855f7; box-shadow: 0 0 0 3px rgba(168,130,255,0.25); }
+    .nick-input.invalid { border-color: #ff6b8a; box-shadow: 0 0 0 3px rgba(255,107,138,0.3); animation: nickShake 0.4s; }
+    @keyframes nickShake { 0%,100%{transform:translateX(0)} 20%,60%{transform:translateX(-6px)} 40%,80%{transform:translateX(6px)} }
     .primary-btn {
       width: 100%; margin-top: 14px; padding: 14px;
       font-size: 17px; font-weight: 700; color: #fff;
@@ -1496,7 +1498,17 @@
     function startGame() {
       audio(); // ユーザー操作で音声を有効化
       const input = document.getElementById("nickname-input");
-      playerName = (input.value || "").trim();
+      const name = (input.value || "").trim();
+      if (!name) {
+        // ニックネーム未入力ではスタートさせない
+        toast("ニックネームを入力してください");
+        input.classList.remove("invalid"); void input.offsetWidth; // アニメ再生のためリセット
+        input.classList.add("invalid");
+        input.focus();
+        setTimeout(function () { input.classList.remove("invalid"); }, 1200);
+        return;
+      }
+      playerName = name;
       try { localStorage.setItem("purple_stacker_nick", playerName); } catch (e) {}
       loadLocalBest();
       previousBest = bestScore;
